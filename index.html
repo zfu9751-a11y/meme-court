@@ -2539,6 +2539,50 @@ textarea::placeholder{color:var(--text3)}
         </div>
       </div>
     </div>
+
+    <!-- 代币分配表 -->
+    <div style="margin-top:20px;padding:16px;background:var(--bg2);border-radius:12px;border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+        📊 $GAVEL 代币分配 · 总量 1,000,000,000（固定不增发）
+      </div>
+      <div style="display:grid;gap:8px">
+        <!-- 分配条目 -->
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:var(--text2)">社区奖励池（押注奖励 / 陪审员激励）</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">50%</div>
+          <div style="font-size:11px;color:var(--text3)">500M</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#3b82f6;flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:var(--text2)">新人礼包 & 生态推广</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">20%</div>
+          <div style="font-size:11px;color:var(--text3)">200M</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#8b5cf6;flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:var(--text2)">团队 & 开发（12 个月线性解锁）</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">15%</div>
+          <div style="font-size:11px;color:var(--text3)">150M</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#10b981;flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:var(--text2)">流动性做市 & CEX 上币</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">10%</div>
+          <div style="font-size:11px;color:var(--text3)">100M</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:var(--text2)">Hackathon 奖励 & 早期贡献者</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">5%</div>
+          <div style="font-size:11px;color:var(--text3)">50M</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text3)">
+        合约地址：<a href="https://testnet.bscscan.com/address/0x5f9D91603accD8aA5a3ef73F611e229C463dd702" target="_blank" style="color:var(--accent)">0x5f9D…d702 ↗</a>
+        · BEP-20 · BSC Testnet（主网待上线）
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2794,7 +2838,12 @@ textarea::placeholder{color:var(--text3)}
       </div>
 
       <button class="bet-submit-btn" id="betSubmitBtn" onclick="submitBet()" disabled>选择方向后押注</button>
-    </div>
+
+      <!-- 结算透明度说明 -->
+      <div style="margin-top:12px;padding:10px 12px;background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);border-radius:10px;font-size:11px;color:var(--text-sub);line-height:1.6">
+        <strong style="color:var(--accent)">⚙️ V1 结算机制说明</strong><br>
+        当前版本由平台在庭审结束后链上调用 <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:4px">settle()</code>，以 DexScreener 价格为准（开庭价 vs 结算价）。裁定哈希同步写入链上，全程可在 <a href="https://testnet.bscscan.com/address/0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906" target="_blank" style="color:var(--accent)">BSCScan</a> 验证。V2 将接入 Chainlink Price Feed 实现自动结算。
+      </div>
 
     <!-- 押注成功 -->
     <div class="bet-body" id="betSuccess" style="display:none">
@@ -2803,6 +2852,7 @@ textarea::placeholder{color:var(--text3)}
         <div class="bet-success-title">押注成功！</div>
         <div class="bet-success-sub">7 天后 AI 法官裁定结合价格走势<br>系统将自动结算 $GAVEL 奖励</div>
         <div class="bet-success-chip" id="betSuccessChip">已押注 — $GAVEL</div>
+        <div id="betTxLink" style="margin-top:8px;text-align:center"></div>
       </div>
     </div>
   </div>
@@ -3362,6 +3412,37 @@ function submitSideEpi(){
 function fillHint(el){document.getElementById('appealInput').value=el.textContent;document.getElementById('appealInput').focus()}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement.id==='appealInput')submitAppeal()});
 
+// ── 裁定链上存证 ──
+// 把裁定摘要哈希以 0-value tx 的 input data 形式写入链上，不依赖任何额外合约
+async function storeVerdictOnChain(question, parsed) {
+  if (!walletConnected || !window.ethereum?.isMetaMask) return null;
+  try {
+    const summary = `MEME-COURT|${parsed.verdict}|${parsed.confidence}|${question.slice(0,50)}|${Date.now()}`;
+    const hashHex = simpleHashHex(summary);
+    // 前缀 0x4d454d45 = "MEME"（方便 BSCScan 上识别）
+    const data = '0x4d454d45' + hashHex;
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{ from: walletAddress, to: MEME_COURT_ADDRESS, data, value: '0x0', gas: '0x5208' }]
+    });
+    return txHash;
+  } catch(e) { return null; } // 存证失败不影响主流程
+}
+
+// 简易确定性哈希（无需 keccak256 库，足够做存证 ID）
+function simpleHashHex(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+  const combined = (4294967296 * (2097151 & h2) + (h1>>>0));
+  return combined.toString(16).padStart(16,'0') + Date.now().toString(16).padStart(16,'0');
+}
+
 const DEEPSEEK_KEY = 'sk-792c9ca476a64b56a262030afb063f4b';
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
@@ -3441,6 +3522,16 @@ async function submitAppeal() {
       <div class="jp-verdict-short">${shortHTML}</div>
       ${parsed.full ? `<button class="jp-expand-btn" onclick="toggleExpand(this)">▾ 展开完整裁定</button><div class="jp-verdict-full">${parsed.full.replace(/\n/g,'<br>')}</div>` : ''}
       ${caseLink}`;
+
+    // ── 链上裁定存证（异步，不阻塞 UI）──
+    storeVerdictOnChain(q, parsed).then(txHash => {
+      if (txHash) {
+        const proofDiv = document.createElement('div');
+        proofDiv.style.cssText = 'margin-top:10px;padding:8px 10px;background:rgba(22,163,74,0.07);border:1px solid rgba(22,163,74,0.2);border-radius:8px;font-size:11px;color:var(--text-sub)';
+        proofDiv.innerHTML = `🔒 裁定已上链存证 · <a href="https://testnet.bscscan.com/tx/${txHash}" target="_blank" style="color:var(--accent)">BSCScan ↗</a>`;
+        jpBody.appendChild(proofDiv);
+      }
+    });
 
   } catch(e) {
     jpBody.innerHTML = `<div class="jp-verdict-short"><strong>本庭暂时无法审理此案。</strong><br>网络异常，请稍后再试。</div>`;
@@ -4563,37 +4654,113 @@ function updateBetReward() {
   document.getElementById('betRewardEst').textContent = est.toLocaleString() + ' $GAVEL';
 }
 
-function submitBet() {
+async function submitBet() {
   const amt = parseInt(document.getElementById('betAmountInput').value) || 0;
   if (!amt || amt < 10) { showToast('最少押注 10 $GAVEL'); return; }
   if (amt > gavelBalance) { showToast('余额不足'); return; }
   if (!betDirection) { showToast('请选择押注方向'); return; }
+  if (!betCoin) return;
+
   const btn = document.getElementById('betSubmitBtn');
-  btn.textContent = '提交中…';
+  btn.textContent = '⏳ 等待授权…';
   btn.disabled = true;
-  setTimeout(() => {
-    // 扣除余额
+
+  // caseId：用 betCoin.name 对应的链上案件 ID
+  const caseId = betCoin.caseId || ('CASE-' + betCoin.name.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8));
+  const dirCode = betDirection === 'up' ? 1 : 0; // 合约：1=BULLISH, 0=BEARISH
+  const amtWei = BigInt(amt) * BigInt('1000000000000000000'); // 18 decimals
+
+  try {
+    // ── Step 1：approve GAVEL token ──
+    const approveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
+    showToast('Step 1/2：授权 $GAVEL 额度…');
+    const approveTx = await callContract(GAVEL_TOKEN_ADDRESS, approveData);
+    if (!approveTx) {
+      btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌';
+      btn.disabled = false;
+      return;
+    }
+    // 等 approve 确认（简单等待）
+    await new Promise(r => setTimeout(r, 2000));
+
+    // ── Step 2：betWithGavel(string caseId, uint8 direction, uint256 amount) ──
+    btn.textContent = '⏳ 链上押注中…';
+    showToast('Step 2/2：链上押注…');
+    const betData = encodeBetWithGavel(caseId, dirCode, amtWei);
+    const betTx = await callContract(MEME_COURT_ADDRESS, betData);
+    if (!betTx) {
+      btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌';
+      btn.disabled = false;
+      return;
+    }
+
+    // ── 成功后更新 UI ──
     gavelBalance -= amt;
     document.getElementById('gavelBalNum').textContent = gavelBalance.toLocaleString();
     document.getElementById('betBalanceNum').textContent = gavelBalance.toLocaleString();
-    // 记录押注
     const d = coinBets[betCoin.name];
-    d.myDir = betDirection;
-    d.myAmt = amt;
-    if (betDirection === 'up') d.upTotal += amt;
-    else d.downTotal += amt;
-    // 更新奖池统计
+    d.myDir = betDirection; d.myAmt = amt;
+    if (betDirection === 'up') d.upTotal += amt; else d.downTotal += amt;
     const bets = parseInt(document.getElementById('poolBets').textContent) + 1;
     document.getElementById('poolBets').textContent = bets;
-    // 显示成功
+
+    // 保存链上押注记录
+    saveBetRecord({
+      coin: betCoin.name, dir: betDirection, amt,
+      caseId, txHash: betTx,
+      date: new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'})
+    });
+
     document.getElementById('betBody').style.display = 'none';
     document.getElementById('betSuccess').style.display = 'block';
     document.getElementById('betSuccessChip').textContent =
       `已押注 ${amt.toLocaleString()} $GAVEL · ${betDirection === 'up' ? '📈 看涨' : '📉 看跌'} ${betCoin.name}`;
-    // 更新榜单按钮
+
+    // 在成功页展示 BSCScan 链接
+    const txLinkEl = document.getElementById('betTxLink');
+    if (txLinkEl) {
+      txLinkEl.innerHTML = `<a href="https://testnet.bscscan.com/tx/${betTx}" target="_blank"
+        style="color:var(--accent);font-size:11px">查看链上交易 ↗</a>`;
+    }
+
     renderRankList();
-    showToast('押注成功！7天后自动结算');
-  }, 800);
+    showToast('✅ 链上押注成功！');
+
+  } catch(e) {
+    showToast('押注失败：' + (e.message || '未知错误'));
+    btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌';
+    btn.disabled = false;
+  }
+}
+
+// ── ABI 编码辅助（无 ethers.js）──
+function encodeStringParam(str) {
+  const bytes = new TextEncoder().encode(str);
+  const lenHex = bytes.length.toString(16).padStart(64, '0');
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+  const padded = hex.padEnd(Math.ceil(hex.length / 64) * 64, '0');
+  return lenHex + padded;
+}
+
+function encodeApprove(spender, amountWei) {
+  // approve(address,uint256) selector = 0x095ea7b3
+  const sel = '095ea7b3';
+  const addr = spender.slice(2).toLowerCase().padStart(64,'0');
+  const amt  = amountWei.toString(16).padStart(64,'0');
+  return '0x' + sel + addr + amt;
+}
+
+function encodeBetWithGavel(caseId, direction, amountWei) {
+  // betWithGavel(string,uint8,uint256)
+  // selector precomputed: keccak256("betWithGavel(string,uint8,uint256)") -> 首4字节
+  const sel = '7b9a3706'; // SELECTORS.betWithGavel
+  // ABI encoding: (string, uint8, uint256)
+  // offsets: string @ 0x60, uint8, uint256, then string data
+  const strOffset = '0000000000000000000000000000000000000000000000000000000000000060';
+  const dirHex    = direction.toString(16).padStart(64,'0');
+  const amtHex    = amountWei.toString(16).padStart(64,'0');
+  const strData   = encodeStringParam(caseId);
+  return '0x' + sel + strOffset + dirHex + amtHex + strData;
 }
 
 function closeBetModal(e) { if (e.target === document.getElementById('betOverlay')) closeBetDirect(); }
