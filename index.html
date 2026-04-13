@@ -5487,17 +5487,41 @@ function updateDetailReward() {
   document.getElementById('bpEstReward').textContent = '+' + estGavel.toLocaleString() + ' $GAVEL';
 }
 
-function submitDetailBet() {
+async function submitDetailBet() {
   if (!walletConnected) { showToast('请先连接钱包'); return; }
   const amt = parseInt(document.getElementById('bpAmountInput').value) || 0;
   if (!amt || amt < 10) { showToast('最少押注 10 $GAVEL'); return; }
   if (amt > gavelBalance) { showToast('余额不足'); return; }
   if (!detailBetDir) { showToast('请选择押注方向'); return; }
+  if (!currentDetailCase) return;
 
   const btn = document.getElementById('bpSubmitBtn');
-  btn.textContent = '提交中…'; btn.disabled = true;
+  btn.textContent = '⏳ 等待授权…'; btn.disabled = true;
 
-  setTimeout(() => {
+  const caseId = currentDetailCase.caseId || currentDetailCase.id || ('CASE-' + currentDetailCase.name.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8));
+  const dirCode = detailBetDir === 'up' ? 1 : 0;
+  const amtWei = BigInt(amt) * BigInt('1000000000000000000');
+
+  try {
+    // Step 1: approve
+    showToast('Step 1/2：授权 $GAVEL 额度…');
+    const approveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
+    const approveTx = await callContract(GAVEL_TOKEN_ADDRESS, approveData);
+    if (!approveTx) {
+      btn.textContent = '确认押注'; btn.disabled = false; return;
+    }
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Step 2: betWithGavel
+    btn.textContent = '⏳ 链上押注中…';
+    showToast('Step 2/2：链上押注…');
+    const betData = encodeBetWithGavel(caseId, dirCode, amtWei);
+    const betTx = await callContract(MEME_COURT_ADDRESS, betData);
+    if (!betTx) {
+      btn.textContent = '确认押注'; btn.disabled = false; return;
+    }
+
+    // 成功：更新 UI
     gavelBalance -= amt;
     document.getElementById('gavelBalNum').textContent = gavelBalance.toLocaleString();
     document.getElementById('bpBalance').textContent = gavelBalance.toLocaleString();
@@ -5507,51 +5531,45 @@ function submitDetailBet() {
     document.getElementById('dcwInputRow').style.display = 'flex';
     const sendUp = document.getElementById('dcwSendUp');
     const sendDown = document.getElementById('dcwSendDown');
-    sendUp.style.display = detailBetDir === 'up' ? 'block' : 'none';
-    sendDown.style.display = detailBetDir === 'down' ? 'block' : 'none';
+    if (sendUp) sendUp.style.display = detailBetDir === 'up' ? 'block' : 'none';
+    if (sendDown) sendDown.style.display = detailBetDir === 'down' ? 'block' : 'none';
 
-    if (currentDetailCase) currentDetailCase.pool += amt;
+    currentDetailCase.pool += amt;
     document.getElementById('bpPoolVal').textContent = currentDetailCase.pool.toLocaleString();
-    // 更新 BNB 池显示
     const newBnb = (currentDetailCase.pool * 0.7 / 320).toFixed(3);
     document.getElementById('bpBnbPool').textContent = newBnb;
     document.getElementById('bpBnbUsd').textContent = '≈ $' + Math.round(parseFloat(newBnb) * 300);
 
     btn.textContent = `✅ 已押注 ${amt.toLocaleString()} $GAVEL`;
 
-    // 保存真实押注记录到 localStorage
-    if (walletConnected && currentDetailCase) {
-      const today = new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'});
-      saveBetRecord({
-        coin: currentDetailCase.name,
-        icon: currentDetailCase.icon || '⚖️',
-        caseId: currentDetailCase.id,
-        dir: detailBetDir,
-        dirLabel: detailBetDir === 'up' ? '📈 看涨' : '📉 看跌',
-        amount: amt,
-        status: 'pending',
-        reward: '待结算',
-        date: today,
-        txType: 'gavel',
-      });
-      saveGavelHistory({
-        type: 'bet', icon: detailBetDir === 'up' ? '📈' : '📉',
-        title: `押注 ${detailBetDir === 'up' ? '看涨' : '看跌'} · ${currentDetailCase.name}`,
-        sub: `${currentDetailCase.id} · 链上确认中`,
-        amount: `-${amt.toLocaleString()}`,
-        rawAmount: -amt,
-        date: new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}),
-        positive: false
-      });
-    }
+    // 保存记录
+    const today = new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'});
+    saveBetRecord({
+      coin: currentDetailCase.name, icon: currentDetailCase.icon || '⚖️',
+      caseId, dir: detailBetDir,
+      dirLabel: detailBetDir === 'up' ? '📈 看涨' : '📉 看跌',
+      amount: amt, status: 'pending', reward: '待结算', date: today,
+      txHash: betTx, txType: 'gavel',
+    });
+    saveGavelHistory({
+      type: 'bet', icon: detailBetDir === 'up' ? '📈' : '📉',
+      title: `押注 ${detailBetDir === 'up' ? '看涨' : '看跌'} · ${currentDetailCase.name}`,
+      sub: `${caseId} · <a href="https://testnet.bscscan.com/tx/${betTx}" target="_blank" style="color:var(--accent)">链上已确认 ↗</a>`,
+      amount: `-${amt.toLocaleString()}`, rawAmount: -amt, date: today, positive: false
+    });
 
-    // 发弹幕
+    // 弹幕
     const bf = document.getElementById('danmakuBattlefield');
     if (bf) spawnDanmaku(bf, detailBetDir, true, detailBetDir==='up'?'我押涨！🚀':'我押跌！💀');
 
-    // 弹出陪审员卡片
-    setTimeout(() => openJurorCard(currentDetailCase, detailBetDir, amt), 400);
-  }, 800);
+    showToast('✅ 链上押注成功！');
+    // 弹出陪审员卡片（附带 tx hash）
+    setTimeout(() => openJurorCard(currentDetailCase, detailBetDir, amt, betTx), 400);
+
+  } catch(e) {
+    showToast('押注失败：' + (e.message || '未知错误'));
+    btn.textContent = '确认押注'; btn.disabled = false;
+  }
 }
 
 /* ══ Etherscan / BSCScan API 合约验证层 ══ */
@@ -6438,7 +6456,7 @@ function renderHotCourtCards() {
 }
 
 /* ── 陪审员卡片 ── */
-async function openJurorCard(c, dir, amt) {
+async function openJurorCard(c, dir, amt, txHash) {
   const bnbPool = (c.pool * 0.7 / 320).toFixed(3);
   const sideTotal = dir==='up' ? Math.floor(c.pool*0.62) : Math.floor(c.pool*0.38);
   const ratio = amt / (sideTotal + amt);
@@ -6452,6 +6470,19 @@ async function openJurorCard(c, dir, amt) {
   document.getElementById('jcDeadline').textContent = '验证截止：' + c.timer;
   document.getElementById('jcReasonText').textContent = '⏳ AI 法官正在生成押注依据…';
   document.getElementById('jcReasonInput').value = '';
+
+  // 如果有链上 tx，在卡片底部注入 BSCScan 链接
+  let txLinkEl = document.getElementById('jcTxLink');
+  if (!txLinkEl) {
+    txLinkEl = document.createElement('div');
+    txLinkEl.id = 'jcTxLink';
+    txLinkEl.style.cssText = 'margin-top:8px;text-align:center;font-size:11px';
+    document.getElementById('jurorCard')?.appendChild(txLinkEl);
+  }
+  txLinkEl.innerHTML = txHash
+    ? `🔗 <a href="https://testnet.bscscan.com/tx/${txHash}" target="_blank" style="color:var(--accent)">链上交易已确认 · BSCScan ↗</a>`
+    : '';
+
   document.getElementById('jurorOverlay').classList.add('open');
   // AI 生成押注依据
   try {
