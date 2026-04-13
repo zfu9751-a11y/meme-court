@@ -2969,6 +2969,8 @@ textarea::placeholder{color:var(--text3)}
         当前版本由平台在庭审结束后链上调用 <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:4px">settle()</code>，以 DexScreener 价格为准（开庭价 vs 结算价）。裁定哈希同步写入链上，全程可在 <a href="https://testnet.bscscan.com/address/0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906" target="_blank" style="color:var(--accent)">BSCScan</a> 验证。V2 将接入 Chainlink Price Feed 实现自动结算。
       </div>
 
+    </div><!-- /betBody -->
+
     <!-- 押注成功 -->
     <div class="bet-body" id="betSuccess" style="display:none">
       <div class="bet-success">
@@ -2978,9 +2980,10 @@ textarea::placeholder{color:var(--text3)}
         <div class="bet-success-chip" id="betSuccessChip">已押注 — $GAVEL</div>
         <div id="betTxLink" style="margin-top:8px;text-align:center"></div>
       </div>
-    </div>
-  </div>
-</div>
+    </div><!-- /betSuccess -->
+
+  </div><!-- /betModal -->
+</div><!-- /betOverlay -->
 
 <!-- AI 法官悬浮窗 -->
 <div class="judge-panel" id="judgePanel">
