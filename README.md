@@ -1,6 +1,6 @@
 # ⚖️ Meme 法庭 · Meme Court
 
-**链上 Meme 势力裁决所** — BNB Chain 上的 AI 裁判 + 社区押注平台
+**链上 Meme 势力裁决所** — BNB Chain 上的 AI 裁判 + 社区押注平台（始终优先围绕four.meme进行生态打造）
 
 🌐 **Live Demo**: https://zfu9751-a11y.github.io/meme-court/
 
