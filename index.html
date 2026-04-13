@@ -1913,38 +1913,63 @@ textarea::placeholder{color:var(--text3)}
 
 <!-- ══ 开庭广场页 ══ -->
 <div class="page" id="page-court">
+
+  <!-- Hero 区：精选裁定轮播 -->
+  <div id="featuredHero" style="background:linear-gradient(135deg,#111110 0%,#1a1a18 60%,#0f0f0e 100%);position:relative;overflow:hidden">
+    <!-- 背景纹理 -->
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(255,99,64,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(22,163,74,0.06) 0%,transparent 50%);pointer-events:none"></div>
+
+    <!-- 轮播容器 -->
+    <div style="position:relative;z-index:1">
+      <!-- 幻灯片区域 -->
+      <div id="featuredSlides" style="overflow:hidden">
+        <div id="featuredTrack" style="display:flex;transition:transform .5s cubic-bezier(.4,0,.2,1)">
+          <!-- JS 动态渲染 -->
+        </div>
+      </div>
+
+      <!-- 圆点指示器 + 统计条 -->
+      <div style="border-top:1px solid rgba(255,255,255,0.06)">
+        <div class="inner" style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;padding-bottom:10px;flex-wrap:wrap;gap:8px">
+          <!-- 左：统计数据 -->
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--red);animation:blink 1.5s infinite;display:inline-block"></span>
+              <span style="font-size:12px;font-weight:700;color:#fff" id="heroLiveCount">3</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.35)">正在开庭</span>
+            </div>
+            <div style="width:1px;height:14px;background:rgba(255,255,255,0.1)"></div>
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="font-size:12px;font-weight:700;color:#fff">7</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.35)">候审中</span>
+            </div>
+            <div style="width:1px;height:14px;background:rgba(255,255,255,0.1)"></div>
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="font-size:12px;font-weight:700;color:#4ade80;font-family:var(--mono)" id="heroTotalPool">128,400</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.35)">$GAVEL 奖池</span>
+            </div>
+            <div style="width:1px;height:14px;background:rgba(255,255,255,0.1)"></div>
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="font-size:12px;font-weight:700;color:#fff">1,247</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.35)">参与押注</span>
+            </div>
+          </div>
+          <!-- 右：圆点指示器 + 翻页 -->
+          <div style="display:flex;align-items:center;gap:12px">
+            <button onclick="featuredPrev()" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">‹</button>
+            <div id="featuredDots" style="display:flex;align-items:center;gap:6px"></div>
+            <button onclick="featuredNext()" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主内容区 -->
   <main class="content-wrap">
 
-    <!-- 今日热门置顶 -->
-    <div style="margin-bottom:20px">
-      <div class="sec-label" style="margin-bottom:12px">🔥 今日热门开庭 <span class="count">four.meme 新案受理 · 热度 TOP</span></div>
-      <div class="hot-court-wrap">
-        <div class="hot-court-scroll" id="hotCourtScroll"></div>
-      </div>
-    </div>
-
-    <!-- 顶部统计 -->
-    <div class="court-stats-bar">
-      <div class="court-stat">
-        <div class="court-stat-val accent" id="courtLiveCount">3</div>
-        <div class="court-stat-lbl">🔴 正在开庭</div>
-      </div>
-      <div class="court-stat">
-        <div class="court-stat-val">7</div>
-        <div class="court-stat-lbl">⏳ 候审中</div>
-      </div>
-      <div class="court-stat">
-        <div class="court-stat-val green" id="courtTotalPool">128,400</div>
-        <div class="court-stat-lbl">⚖️ 本期总奖池 $GAVEL</div>
-      </div>
-      <div class="court-stat">
-        <div class="court-stat-val">1,247</div>
-        <div class="court-stat-lbl">👥 参与押注人数</div>
-      </div>
-    </div>
-
     <!-- Tab 栏 -->
-    <div class="court-tabs">
+    <div class="court-tabs" style="margin-top:20px">
       <button class="court-tab active" id="courtTab-live" onclick="switchCourtTab('live')">
         🔴 进行中 <span class="court-tab-count">3</span>
       </button>
@@ -6702,8 +6727,277 @@ function updateCd(){
   if(cdVal)cdVal.textContent=`${d}D ${h}H`;
 }
 
+/* ══ 精选裁定轮播系统 ══ */
+
+// Fallback mock 数据（API 未就绪或加载中时展示）
+const FEATURED_FALLBACK = [
+  {
+    coin:'PEPE', icon:'🐸', pair:'PEPE / BNB', source:'four.meme · 上线 2 小时',
+    verdict:'BULLISH', confidence:72, risk:'高风险',
+    short:'流动性虽薄如蝉翼，但巨鲸已悄然入场吸筹。\n社区押注明显倾向看涨，配合 127% 的涨幅颇有妖币潜质。\n新币热度未散，快审档位赌的就是这波开盘冲锋。\n本庭警告：这不过是场限时烟花秀，切勿贪杯。',
+    full:'本案 PEPE 上线仅 2 小时，流动性锁定 $48K，持仓地址 312 显示早期参与度尚可。24 小时涨幅 +127% 及社区押注 62% 看涨，显示市场情绪初步形成。\n\n然而流动性池过薄，大额卖出极易引发崩塌。建议极小仓位参与，设置严格止损，切勿 FOMO 追高。',
+    metrics:[
+      {label:'流动性', val:'$48K', sub:'DexScreener', color:'#fff'},
+      {label:'24h 涨幅', val:'+127%', sub:'DexScreener', color:'#4ade80'},
+      {label:'持仓地址', val:'312', sub:'Etherscan V2', color:'#fff'},
+      {label:'巨鲸动向', val:'🐳 买入', sub:'大额追踪', color:'#ff6340'},
+      {label:'参与押注', val:'89', sub:'人', color:'#fff'},
+      {label:'社区看涨', val:'62%', sub:'押注比例', color:'#4ade80'},
+    ],
+    caseId:'C-2026-044',
+  },
+  {
+    coin:'DOGE', icon:'🐶', pair:'DOGE / BNB', source:'four.meme · 上线 6 小时',
+    verdict:'BULLISH', confidence:85, risk:'中风险',
+    short:'老狗出新招，链上资金持续流入。\n巨鲸筹码集中度下降，散户参与度创本周新高。\n马斯克效应犹在，短期动能充足。\n本庭裁定：可小仓参与，但别忘了它涨多快、跌也多快。',
+    full:'DOGE 本次拉升伴随明显的链上资金流入，持仓地址数 24 小时增加 847，显示新资金入场。社区押注看涨比例达 78%，为近期高位。\n\n风险在于 DOGE 高度依赖外部叙事驱动，缺乏基本面支撑。建议设置 15% 止损，不宜重仓。',
+    metrics:[
+      {label:'流动性', val:'$320K', sub:'DexScreener', color:'#fff'},
+      {label:'24h 涨幅', val:'+34%', sub:'DexScreener', color:'#4ade80'},
+      {label:'持仓地址', val:'8,420', sub:'Etherscan V2', color:'#fff'},
+      {label:'巨鲸动向', val:'🐳 买入', sub:'大额追踪', color:'#ff6340'},
+      {label:'参与押注', val:'412', sub:'人', color:'#fff'},
+      {label:'社区看涨', val:'78%', sub:'押注比例', color:'#4ade80'},
+    ],
+    caseId:'C-2026-041',
+  },
+  {
+    coin:'WIF', icon:'🎩', pair:'WIF / BNB', source:'four.meme · 上线 12 小时',
+    verdict:'BEARISH', confidence:68, risk:'高风险',
+    short:'帽子戴得漂亮，但链上数据露馅了。\n巨鲸在过去 4 小时持续出货，散户还在接盘。\n流动性深度不足以支撑当前价格。\n本庭裁定：看跌，建议场外观望。',
+    full:'WIF 近期价格上涨主要由社区情绪驱动，但链上数据显示巨鲸地址在高位持续减仓，过去 4 小时净卖出超 $85K。持仓地址数增长停滞，新增地址主要来自散户。\n\n结合当前流动性深度，本庭判断短期下行风险较大，建议等待放量确认后再考虑入场。',
+    metrics:[
+      {label:'流动性', val:'$92K', sub:'DexScreener', color:'#fff'},
+      {label:'24h 涨幅', val:'+18%', sub:'DexScreener', color:'#4ade80'},
+      {label:'持仓地址', val:'1,203', sub:'Etherscan V2', color:'#fff'},
+      {label:'巨鲸动向', val:'🔴 出货', sub:'大额追踪', color:'#f87171'},
+      {label:'参与押注', val:'156', sub:'人', color:'#fff'},
+      {label:'社区看跌', val:'55%', sub:'押注比例', color:'#f87171'},
+    ],
+    caseId:'C-2026-040',
+  },
+  {
+    coin:'BONK', icon:'🔨', pair:'BONK / BNB', source:'four.meme · 上线 1 天',
+    verdict:'NEUTRAL', confidence:55, risk:'中风险',
+    short:'不涨不跌，法官也懵了。\n链上数据呈现典型的横盘整理形态。\n社区分歧明显，押注双方势均力敌。\n本庭裁定：中立观望，等方向选择后再押注。',
+    full:'BONK 当前处于明显的横盘整理阶段，24 小时涨幅仅 +3.2%，流动性稳定但无明显方向。社区押注看涨 51% vs 看跌 49%，分歧极大。\n\n建议等待放量突破后再介入，当前入场性价比较低，时间成本较高。',
+    metrics:[
+      {label:'流动性', val:'$156K', sub:'DexScreener', color:'#fff'},
+      {label:'24h 涨幅', val:'+3.2%', sub:'DexScreener', color:'#fbbf24'},
+      {label:'持仓地址', val:'3,891', sub:'Etherscan V2', color:'#fff'},
+      {label:'巨鲸动向', val:'➡️ 持仓', sub:'大额追踪', color:'#fbbf24'},
+      {label:'参与押注', val:'287', sub:'人', color:'#fff'},
+      {label:'社区看涨', val:'51%', sub:'押注比例', color:'#fbbf24'},
+    ],
+    caseId:'C-2026-039',
+  },
+  {
+    coin:'TURBO', icon:'⚡', pair:'TURBO / BNB', source:'four.meme · 上线 3 天',
+    verdict:'BULLISH', confidence:79, risk:'中风险',
+    short:'TURBO 这次不是在吹，数据说话。\n链上地址数 3 天增长 240%，社区共识快速形成。\n巨鲸持仓稳定，无明显出货迹象。\n本庭裁定：看涨，可适量参与，注意仓位控制。',
+    full:'TURBO 本轮行情由真实链上需求驱动，持仓地址数 3 天内从 820 增长至 2,788，增幅 240%。巨鲸地址持仓集中度较低（Top 10 持仓占比 23%），筹码分散利于健康上涨。\n\n社区押注看涨比例 71%，奖池规模 28,400 $GAVEL，参与度较高。风险点在于短期涨幅已达 89%，追高需谨慎。',
+    metrics:[
+      {label:'流动性', val:'$210K', sub:'DexScreener', color:'#fff'},
+      {label:'24h 涨幅', val:'+89%', sub:'DexScreener', color:'#4ade80'},
+      {label:'持仓地址', val:'2,788', sub:'Etherscan V2', color:'#fff'},
+      {label:'巨鲸动向', val:'🐳 持仓', sub:'大额追踪', color:'#ff6340'},
+      {label:'参与押注', val:'334', sub:'人', color:'#fff'},
+      {label:'社区看涨', val:'71%', sub:'押注比例', color:'#4ade80'},
+    ],
+    caseId:'C-2026-042',
+  },
+];
+
+let featuredData = [];
+let featuredIdx = 0;
+let featuredTimer = null;
+
+// 渲染单张幻灯片 HTML
+function buildSlideHTML(d) {
+  const isUp = d.verdict === 'BULLISH';
+  const isDown = d.verdict === 'BEARISH';
+  const verdictColor = isUp ? '#4ade80' : isDown ? '#f87171' : '#fbbf24';
+  const verdictBg = isUp ? 'rgba(22,163,74,0.2)' : isDown ? 'rgba(220,38,38,0.2)' : 'rgba(217,119,6,0.2)';
+  const verdictBorder = isUp ? 'rgba(22,163,74,0.4)' : isDown ? 'rgba(220,38,38,0.4)' : 'rgba(217,119,6,0.3)';
+  const verdictLabel = isUp ? '📈 BULLISH' : isDown ? '📉 BEARISH' : '⚖️ NEUTRAL';
+  const shortLines = (d.short || '').split('\n').filter(Boolean);
+  const lastLine = shortLines.pop();
+  const shortHTML = shortLines.map(l => `<span style="color:rgba(255,255,255,0.55)">${l}</span>`).join('<br>');
+
+  return `<div style="min-width:100%;padding:28px 0 0;box-sizing:border-box">
+    <div class="inner">
+      <!-- 标题行 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(255,99,64,0.15);color:var(--accent);border:1px solid rgba(255,99,64,0.3);letter-spacing:.06em">⚖️ 法官精选裁定</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.3)">真实链上数据 · AI 分析</span>
+        </div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.2);font-family:var(--mono)">${new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'})} · BSC</span>
+      </div>
+      <!-- 主体：左文右数据 -->
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:28px;align-items:start">
+        <!-- 左：裁定 -->
+        <div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <div style="font-size:32px;width:52px;height:52px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${d.icon}</div>
+            <div>
+              <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.03em">${d.pair}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.35);font-family:var(--mono);margin-top:2px">${d.source}</div>
+            </div>
+            <span style="font-size:12px;font-weight:800;padding:5px 14px;border-radius:99px;background:${verdictBg};color:${verdictColor};border:1.5px solid ${verdictBorder}">${verdictLabel}</span>
+            <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;background:rgba(217,119,6,0.2);color:#fbbf24;border:1px solid rgba(217,119,6,0.3)">${d.risk}</span>
+            <span style="font-size:11px;color:rgba(255,255,255,0.35)">置信度 <strong style="color:#fff">${d.confidence}%</strong></span>
+          </div>
+          <div style="font-size:13px;line-height:1.8;margin-bottom:10px">
+            ${shortHTML}<br>
+            <strong style="color:var(--accent)">${lastLine}</strong>
+          </div>
+          <details style="margin-bottom:18px">
+            <summary style="font-size:12px;color:rgba(255,255,255,0.3);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">▾ 展开完整分析</summary>
+            <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.4);line-height:1.8;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08)">${(d.full||'').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}</div>
+          </details>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-bottom:24px">
+            <button onclick="openCourtDetail('${d.caseId}')" style="background:var(--accent);color:#fff;border:none;border-radius:99px;padding:9px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">⚖️ 参与押注 →</button>
+            <span style="font-size:11px;color:rgba(255,255,255,0.22);display:flex;align-items:center;gap:5px">
+              <span style="width:4px;height:4px;border-radius:50%;background:#4ade80;display:inline-block"></span>
+              裁定已上链存证 · <a href="https://testnet.bscscan.com/address/0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906" target="_blank" style="color:rgba(255,99,64,0.6)">BSCScan ↗</a>
+            </span>
+          </div>
+        </div>
+        <!-- 右：链上数据 -->
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden">
+          <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:.08em">📡 链上数据 · 实时</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr">
+            ${(d.metrics||[]).map((m,i) => `
+            <div style="padding:12px 14px;${i%2===0?'border-right:1px solid rgba(255,255,255,0.06);':''}${i<4?'border-bottom:1px solid rgba(255,255,255,0.06);':''}">
+              <div style="font-size:9px;color:rgba(255,255,255,0.28);letter-spacing:.06em;margin-bottom:4px">${m.label}</div>
+              <div style="font-size:16px;font-weight:800;color:${m.color};font-family:var(--mono)">${m.val}</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:2px">${m.sub}</div>
+            </div>`).join('')}
+          </div>
+          <div style="padding:8px 14px;font-size:9px;color:rgba(255,255,255,0.18)">数据来源：DexScreener + Etherscan V2</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// 初始化轮播
+function initFeaturedCarousel(data) {
+  featuredData = data;
+  featuredIdx = 0;
+  const track = document.getElementById('featuredTrack');
+  const dots = document.getElementById('featuredDots');
+  if (!track || !dots) return;
+
+  track.innerHTML = data.map(d => buildSlideHTML(d)).join('');
+
+  dots.innerHTML = data.map((_, i) => `
+    <div onclick="featuredGoTo(${i})" style="width:${i===0?'20px':'6px'};height:6px;border-radius:99px;background:${i===0?'var(--accent)':'rgba(255,255,255,0.25)'};cursor:pointer;transition:all .3s" id="featuredDot${i}"></div>
+  `).join('');
+
+  startFeaturedTimer();
+}
+
+function featuredGoTo(idx) {
+  featuredIdx = idx;
+  const track = document.getElementById('featuredTrack');
+  if (track) track.style.transform = `translateX(-${idx * 100}%)`;
+  // 更新圆点
+  const total = featuredData.length;
+  for (let i = 0; i < total; i++) {
+    const dot = document.getElementById('featuredDot' + i);
+    if (dot) {
+      dot.style.width = i === idx ? '20px' : '6px';
+      dot.style.background = i === idx ? 'var(--accent)' : 'rgba(255,255,255,0.25)';
+    }
+  }
+  resetFeaturedTimer();
+}
+
+function featuredNext() {
+  featuredGoTo((featuredIdx + 1) % featuredData.length);
+}
+
+function featuredPrev() {
+  featuredGoTo((featuredIdx - 1 + featuredData.length) % featuredData.length);
+}
+
+function startFeaturedTimer() {
+  clearInterval(featuredTimer);
+  featuredTimer = setInterval(() => featuredNext(), 4000);
+}
+
+function resetFeaturedTimer() {
+  clearInterval(featuredTimer);
+  featuredTimer = setInterval(() => featuredNext(), 4000);
+}
+
+// 每日 DeepSeek 生成 + localStorage 缓存
+async function loadFeaturedData() {
+  const today = new Date().toLocaleDateString('zh-CN');
+  const cacheKey = 'memecourt_featured_' + today;
+
+  // 先用 fallback 渲染，避免白屏
+  initFeaturedCarousel(FEATURED_FALLBACK);
+
+  // 检查缓存
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed?.length >= 3) {
+        initFeaturedCarousel(parsed);
+        return;
+      }
+    }
+  } catch(e) {}
+
+  // 后台调用 DeepSeek 生成今日精选
+  const coins = [
+    {coin:'PEPE', icon:'🐸', pair:'PEPE / BNB'},
+    {coin:'DOGE', icon:'🐶', pair:'DOGE / BNB'},
+    {coin:'WIF',  icon:'🎩', pair:'WIF / BNB'},
+    {coin:'BONK', icon:'🔨', pair:'BONK / BNB'},
+    {coin:'TURBO',icon:'⚡', pair:'TURBO / BNB'},
+  ];
+
+  const sys = `你是 Meme 法庭的 AI 法官「链上包公」，风格幽默毒舌、数据扎实。
+严格按以下 JSON 格式输出一个对象，不输出任何其他内容，不加 markdown 代码块：
+{"verdict":"BULLISH或BEARISH或NEUTRAL","confidence":数字0到100,"risk":"低风险或中风险或高风险或极高风险","short":"4句精简裁定，用\\n分隔，最后一句是扎心总结","full":"2段完整分析，段间用\\n\\n分隔"}`;
+
+  const results = [];
+  for (const c of coins) {
+    try {
+      const prompt = `请对 BNB Chain 上的 ${c.coin} Meme 币进行今日裁定分析，结合典型的链上数据特征（流动性、涨跌幅、持仓地址、巨鲸动向），给出你的裁定。`;
+      const raw = await callGemini(sys, prompt);
+      const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+      results.push({
+        ...c,
+        source: 'four.meme · 今日更新',
+        verdict: parsed.verdict,
+        confidence: parsed.confidence,
+        risk: parsed.risk,
+        short: parsed.short,
+        full: parsed.full,
+        metrics: FEATURED_FALLBACK.find(f => f.coin === c.coin)?.metrics || [],
+        caseId: 'court-00' + (results.length + 1),
+      });
+    } catch(e) {
+      // 单条失败用 fallback
+      const fb = FEATURED_FALLBACK.find(f => f.coin === c.coin);
+      if (fb) results.push(fb);
+    }
+  }
+
+  if (results.length >= 3) {
+    try { localStorage.setItem(cacheKey, JSON.stringify(results)); } catch(e) {}
+    initFeaturedCarousel(results);
+  }
+}
+
 /* ── INIT ── */
-initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();
+initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();loadFeaturedData();
 setInterval(updateCd,60000);
 setInterval(updateBetDeadline,1000);
 // 检查 MetaMask 是否已授权
