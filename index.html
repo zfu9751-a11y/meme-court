@@ -228,7 +228,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:
 .bsc-kpi-delta.neutral{background:var(--amber-bg);color:var(--amber)}
 
 /* 中间可视化区 — 紧密网格 */
-.bsc-viz-grid{display:grid;grid-template-columns:55fr 45fr;gap:10px;margin-bottom:10px;align-items:stretch}
+.bsc-viz-grid{display:grid;grid-template-columns:55fr 45fr;gap:10px;margin-bottom:10px;align-items:start}
 
 /* 押注战况实时地图 */
 .bsc-bubble-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
@@ -257,7 +257,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:
 .bm-timer{font-size:9px;color:rgba(255,255,255,.7);font-family:var(--mono);margin-top:1px}
 
 /* 右：成交量条形图 + 市场结构饼图 */
-.bsc-right-charts{display:flex;flex-direction:column;gap:10px}
+.bsc-right-charts{display:flex;flex-direction:column;gap:10px;position:sticky;top:68px;max-height:calc(100vh - 80px);overflow-y:auto;scrollbar-width:none}
 .bsc-bar-card,.bsc-pie-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
 .bsc-chart-header{padding:14px 16px 10px;border-bottom:1px solid var(--border)}
 .bsc-chart-title{font-size:13px;font-weight:800;color:var(--text);letter-spacing:-0.02em}
