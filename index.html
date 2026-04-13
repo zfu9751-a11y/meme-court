@@ -5361,7 +5361,10 @@ function renderCourtCards() {
       </div>` : ''}
       <div class="cc-bottom">
         <div class="cc-pool">
-          <div class="cc-pool-val">${c.pool.toLocaleString()} $GAVEL</div>
+          <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:6px">
+            <span>${(c.pool * 0.7 / 320).toFixed(3)} BNB</span>
+            <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+          </div>
           <div class="cc-pool-lbl">奖池 · ${c.initiator}</div>
         </div>
         <div class="cc-bottom-right">
