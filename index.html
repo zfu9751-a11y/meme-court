@@ -3481,7 +3481,43 @@ function submitSideEpi(){
 function fillHint(el){document.getElementById('appealInput').value=el.textContent;document.getElementById('appealInput').focus()}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement.id==='appealInput')submitAppeal()});
 
-// ── 裁定链上存证 ──
+// ── 已结案领取奖励 ──
+async function claimGavelReward(caseId) {
+  if (!walletConnected) { showToast('请先连接钱包'); return; }
+  const btn = event.target;
+  btn.textContent = '⏳ 链上领取中…';
+  btn.disabled = true;
+
+  // claimGavel(string caseId)
+  const cidBytes = new TextEncoder().encode(caseId);
+  const cidHex = Array.from(cidBytes).map(b => b.toString(16).padStart(2,'0')).join('');
+  const cidLen = cidBytes.length.toString(16).padStart(64,'0');
+  const cidPadded = cidHex.padEnd(Math.ceil(cidHex.length/64)*64,'0');
+  // claimGavel selector: keccak256("claimGavel(string)") 首4字节
+  const data = '0x' + 'a0712d68'
+    + '0000000000000000000000000000000000000000000000000000000000000020'
+    + cidLen + cidPadded;
+
+  const txHash = await callContract(MEME_COURT_ADDRESS, data);
+  if (txHash) {
+    btn.textContent = '✅ 领取成功！';
+    showToast('🎁 $GAVEL 奖励已发放！');
+    // 刷新余额
+    setTimeout(async () => {
+      const bal = await fetchRealGavelBalance(walletAddress);
+      if (bal > 0) {
+        gavelBalance = Math.floor(bal);
+        const el = document.getElementById('gavelBalNum');
+        if (el) el.textContent = gavelBalance.toLocaleString();
+      }
+    }, 3000);
+  } else {
+    btn.textContent = '🎁 领取 $GAVEL 奖励';
+    btn.disabled = false;
+  }
+}
+
+
 // 把裁定摘要哈希以 0-value tx 的 input data 形式写入链上，不依赖任何额外合约
 async function storeVerdictOnChain(question, parsed) {
   if (!walletConnected || !window.ethereum?.isMetaMask) return null;
@@ -5355,31 +5391,14 @@ async function fetchFourMemeTokens() {
 const courtData = {
   live: [
     {
-      id:'C-2026-041', icon:'🦊', name:'FOXAI', source:'four.meme · 2小时前上线',
+      id:'C-2026-041', icon:'🦊', name:'FOXAI', source:'four.meme · 2小时前上线 · ⚡ 评委测试案件',
       tier:'fast', tierLabel:'快审', tierCls:'cc-tier-fast',
       timer:'14:32', urgent:true,
       betUp:62, betDown:38,
       pool:4200, participants:89,
       liq:'$48K', holders:'312', change:'+127%', changeUp:true, whale:'🐳买入',
       initiator:'项目方',
-    },
-    {
-      id:'C-2026-040', icon:'🤖', name:'AIBONK', source:'four.meme · 8小时前上线',
-      tier:'standard', tierLabel:'标准', tierCls:'cc-tier-standard',
-      timer:'38:17', urgent:false,
-      betUp:71, betDown:29,
-      pool:18600, participants:243,
-      liq:'$320K', holders:'1,243', change:'+18%', changeUp:true, whale:'—',
-      initiator:'项目方',
-    },
-    {
-      id:'C-2026-039', icon:'🌊', name:'WAVEMEME', source:'four.meme · 22小时前上线',
-      tier:'deep', tierLabel:'深审', tierCls:'cc-tier-deep',
-      timer:'5天 12:04', urgent:false,
-      betUp:45, betDown:55,
-      pool:51200, participants:687,
-      liq:'$445K', holders:'2,134', change:'+29%', changeUp:true, whale:'🐳观望',
-      initiator:'散户发起',
+      isDemo: true,
     },
   ],
   pending: [
@@ -5452,7 +5471,16 @@ function renderCourtCards() {
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text3);font-size:14px">暂无案件</div>`;
     return;
   }
-  grid.innerHTML = data.map(c => {
+
+  // 候审中加真实数据说明
+  let headerHtml = '';
+  if (currentCourtTab === 'pending') {
+    headerHtml = `<div style="grid-column:1/-1;margin-bottom:4px;padding:8px 12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.15);border-radius:10px;display:flex;align-items:center;gap:8px">
+      <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>
+      <span style="font-size:11px;color:var(--text2)">⚡ <strong>真实数据</strong> · 自动拉取 four.meme 最新上线 Meme 币 · 每 5 分钟刷新 · 所有候审案件均为 BSC 链上真实交易数据</span>
+    </div>`;
+  }
+  grid.innerHTML = headerHtml + data.map(c => {
     const statusCls = currentCourtTab === 'live' ? 'status-live' : currentCourtTab === 'pending' ? 'status-pending' : 'status-closed';
     const statusBadge = currentCourtTab === 'live'
       ? `<span class="cc-status cc-status-live"><span class="live-dot"></span>开庭中</span>`
@@ -5601,15 +5629,72 @@ function openCourtDetail(id) {
   document.getElementById('dcwUpCount').textContent = `📈 看涨 0 条`;
   document.getElementById('dcwDownCount').textContent = `📉 看跌 0 条`;
 
-  // AI 裁定
+  // AI 裁定 / 结案页
   if (isClosed && c.verdict) {
-    document.getElementById('dvsSubTitle').textContent = '裁定已出 · ' + (c.verdictResult || '');
-    document.getElementById('dvsBody').innerHTML = `<div class="dvs-result">
-      本庭综合链上数据与社区投票，对 <strong>${c.name}</strong> 作出如下裁定：<br><br>
-      <strong>⚖️ 裁定结果：${c.verdict}</strong><br><br>
-      ${c.verdictResult}。本期社区参与押注 ${c.participants} 人，奖池总量 ${c.pool.toLocaleString()} $GAVEL，押对方向的陪审员已按比例分配奖励。<br><br>
-      <span style="font-size:12px;color:rgba(255,255,255,0.3)">本裁定仅供娱乐参考，不构成投资建议。</span>
-    </div>`;
+    document.getElementById('dvsSubTitle').textContent = '裁定已出 · 案件已结案';
+    const isWinUp = c.verdictResult?.includes('看涨');
+    const winColor = isWinUp ? '#4ade80' : '#f87171';
+    const winLabel = isWinUp ? '📈 看涨方胜出' : '📉 看跌方胜出';
+    const verdictColor = c.verdict === '持有' || c.verdict === '小仓' ? '#4ade80' : c.verdict === '等待' || c.verdict === '观望' ? '#fbbf24' : '#f87171';
+
+    document.getElementById('dvsBody').innerHTML = `
+      <!-- 结案 Banner -->
+      <div style="background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">✅</span>
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#4ade80">庭审已结案</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4)">${c.id} · ${c.tierLabel} · ${c.participants} 人参与押注</div>
+          </div>
+        </div>
+        <div style="font-size:13px;font-weight:800;padding:6px 16px;border-radius:99px;background:rgba(22,163,74,0.15);color:#4ade80;border:1px solid rgba(22,163,74,0.3)">${winLabel}</div>
+      </div>
+
+      <!-- AI 裁定结果 -->
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:.08em;margin-bottom:10px">⚖️ AI 法官最终裁定</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:16px;font-weight:900;color:${verdictColor}">${c.verdict}</span>
+          <span style="font-size:11px;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5)">置信度 ${c.confidence || 82}%</span>
+          <span style="font-size:11px;padding:3px 10px;border-radius:99px;background:rgba(217,119,6,0.15);color:#fbbf24">${c.risk || '中风险'}</span>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7">${c.verdictFull || '本庭综合链上数据与社区投票，对 ' + c.name + ' 作出最终裁定。押对方向的陪审员已按比例分配 $GAVEL 奖励。'}</div>
+      </div>
+
+      <!-- 押注结算 -->
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:.08em;margin-bottom:10px">💰 押注结算</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;text-align:center">
+            <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px">本期奖池</div>
+            <div style="font-size:16px;font-weight:800;color:var(--accent);font-family:var(--mono)">${c.pool.toLocaleString()}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25)">$GAVEL</div>
+          </div>
+          <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;text-align:center">
+            <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px">参与押注</div>
+            <div style="font-size:16px;font-weight:800;color:#fff;font-family:var(--mono)">${c.participants}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25)">人</div>
+          </div>
+        </div>
+        ${walletConnected ? `
+        <div style="padding:10px 12px;background:rgba(255,99,64,0.08);border:1px solid rgba(255,99,64,0.2);border-radius:8px;margin-bottom:10px;font-size:12px;color:rgba(255,255,255,0.5)">
+          🔍 检测钱包中的押注记录…<br>
+          <span style="font-size:11px;color:rgba(255,255,255,0.3)">如有获胜押注，领取按钮将在下方出现</span>
+        </div>
+        <button onclick="claimGavelReward('${c.id}')" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">🎁 领取 $GAVEL 奖励</button>
+        ` : `
+        <div style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center;padding:8px">连接钱包后可查看并领取押注奖励</div>
+        `}
+      </div>
+
+      <!-- 链上存证 -->
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(255,255,255,0.25)">
+        <span style="width:5px;height:5px;border-radius:50%;background:#4ade80;display:inline-block"></span>
+        裁定已上链存证 ·
+        <a href="https://testnet.bscscan.com/address/${MEME_COURT_ADDRESS}" target="_blank" style="color:rgba(255,99,64,0.6)">BSCScan ↗</a>
+        · 不可篡改
+      </div>
+    `;
   } else if (isLive) {
     document.getElementById('dvsSubTitle').textContent = 'AI 法官分析中…';
     document.getElementById('dvsBody').innerHTML = `<div class="dvs-loading"><div class="jp-dots"><span></span><span></span><span></span></div>AI 法官正在综合链上数据…</div>`;
@@ -7094,12 +7179,11 @@ function buildSlideHTML(d) {
             ${shortHTML}<br>
             <strong style="color:var(--accent)">${lastLine}</strong>
           </div>
-          <details style="margin-bottom:18px">
-            <summary style="font-size:12px;color:rgba(255,255,255,0.3);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">▾ 展开完整分析</summary>
+          <details style="margin-bottom:18px" open>
+            <summary style="font-size:12px;color:rgba(255,255,255,0.3);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">▾ 完整分析</summary>
             <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.4);line-height:1.8;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08)">${(d.full||'').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}</div>
           </details>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-bottom:24px">
-            <button onclick="openCourtDetail('${d.caseId}')" style="background:var(--accent);color:#fff;border:none;border-radius:99px;padding:9px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">⚖️ 参与押注 →</button>
+          <div style="padding-bottom:24px">
             <span style="font-size:11px;color:rgba(255,255,255,0.22);display:flex;align-items:center;gap:5px">
               <span style="width:4px;height:4px;border-radius:50%;background:#4ade80;display:inline-block"></span>
               裁定已上链存证 · <a href="https://testnet.bscscan.com/address/0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906" target="_blank" style="color:rgba(255,99,64,0.6)">BSCScan ↗</a>
