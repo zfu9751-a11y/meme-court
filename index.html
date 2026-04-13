@@ -2438,6 +2438,61 @@ textarea::placeholder{color:var(--text3)}
   </div>
 </div>
 
+<!-- ══ 已结案裁定弹窗 ══ -->
+<div id="verdictOverlay" onclick="closeVerdictModal(event)" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)">
+  <div id="verdictModal" style="background:var(--white);border-radius:20px;width:100%;max-width:440px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.25);animation:modal-in .28s cubic-bezier(.34,1.2,.64,1)">
+    <!-- 顶部 -->
+    <div id="vmHeader" style="padding:20px 20px 16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div id="vmIcon" style="font-size:28px"></div>
+          <div>
+            <div id="vmName" style="font-size:18px;font-weight:900;color:var(--text);letter-spacing:-0.02em"></div>
+            <div id="vmId" style="font-size:11px;color:var(--text3);font-family:var(--mono)"></div>
+          </div>
+        </div>
+        <button onclick="closeVerdictDirect()" style="width:28px;height:28px;border-radius:50%;background:var(--border);border:none;cursor:pointer;font-size:14px;color:var(--text2);display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span id="vmVerdict" style="font-size:13px;font-weight:800;padding:5px 14px;border-radius:99px"></span>
+        <span id="vmConfidence" style="font-size:11px;color:var(--text3)"></span>
+        <span id="vmRisk" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--amber-bg);color:var(--amber)"></span>
+        <span id="vmResult" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--green-bg);color:var(--green)"></span>
+      </div>
+    </div>
+    <!-- 裁定内容 -->
+    <div style="padding:16px 20px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:8px">⚖️ AI 法官裁定</div>
+      <div id="vmShort" style="font-size:13px;color:var(--text);line-height:1.75;margin-bottom:14px"></div>
+      <!-- 结算数据 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+        <div style="padding:10px;background:var(--bg2);border-radius:8px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">奖池</div>
+          <div id="vmPool" style="font-size:13px;font-weight:800;color:var(--accent);font-family:var(--mono)"></div>
+          <div style="font-size:9px;color:var(--text3)">$GAVEL</div>
+        </div>
+        <div style="padding:10px;background:var(--bg2);border-radius:8px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">参与</div>
+          <div id="vmParticipants" style="font-size:13px;font-weight:800;color:var(--text);font-family:var(--mono)"></div>
+          <div style="font-size:9px;color:var(--text3)">人</div>
+        </div>
+        <div style="padding:10px;background:var(--bg2);border-radius:8px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">看涨</div>
+          <div id="vmBetUp" style="font-size:13px;font-weight:800;color:var(--green);font-family:var(--mono)"></div>
+          <div style="font-size:9px;color:var(--text3)">押注比</div>
+        </div>
+      </div>
+      <!-- 领取奖励 -->
+      <div id="vmClaimArea"></div>
+      <!-- 链上存证 -->
+      <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px">
+        <span style="width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block"></span>
+        裁定已上链存证 · <a href="https://testnet.bscscan.com/address/0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906" target="_blank" style="color:var(--accent)">BSCScan ↗</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ 打脸弹窗 ══ -->
 <style>
 @keyframes slap-hit {
@@ -3481,7 +3536,57 @@ function submitSideEpi(){
 function fillHint(el){document.getElementById('appealInput').value=el.textContent;document.getElementById('appealInput').focus()}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement.id==='appealInput')submitAppeal()});
 
-// ── 已结案领取奖励 ──
+// ── 已结案裁定弹窗 ──
+function openVerdictModal(id) {
+  const c = courtData.closed.find(x => x.id === id);
+  if (!c) return;
+
+  const isWinUp = c.verdictResult?.includes('看涨');
+  const verdictColor = (c.verdict === '持有' || c.verdict === '小仓' || c.verdict === '建仓') ? '#16a34a'
+    : (c.verdict === '等待' || c.verdict === '谨慎') ? '#dc2626' : '#d97706';
+  const verdictBg = (c.verdict === '持有' || c.verdict === '小仓' || c.verdict === '建仓') ? '#f0fdf4'
+    : (c.verdict === '等待' || c.verdict === '谨慎') ? '#fef2f2' : '#fffbeb';
+  const verdictLabel = (c.verdict === '持有' || c.verdict === '小仓' || c.verdict === '建仓') ? '📈 ' + c.verdict
+    : (c.verdict === '等待' || c.verdict === '谨慎') ? '📉 ' + c.verdict : '⚖️ ' + c.verdict;
+
+  document.getElementById('vmIcon').textContent = c.icon;
+  document.getElementById('vmName').textContent = c.name;
+  document.getElementById('vmId').textContent = c.id + ' · ' + c.tierLabel;
+  const vmV = document.getElementById('vmVerdict');
+  vmV.textContent = verdictLabel;
+  vmV.style.cssText = `font-size:13px;font-weight:800;padding:5px 14px;border-radius:99px;background:${verdictBg};color:${verdictColor};border:1.5px solid ${verdictColor}40`;
+  document.getElementById('vmConfidence').textContent = `置信度 ${c.confidence || 80}%`;
+  document.getElementById('vmRisk').textContent = c.risk || '中风险';
+  document.getElementById('vmResult').textContent = c.verdictResult || '';
+
+  // 裁定文字
+  const lines = (c.verdictShort || '').split('\n').filter(Boolean);
+  const last = lines.pop();
+  document.getElementById('vmShort').innerHTML =
+    lines.map(l => `<span style="color:var(--text2)">${l}</span>`).join('<br>') +
+    (lines.length ? '<br>' : '') +
+    `<strong style="color:var(--accent)">${last}</strong>`;
+
+  document.getElementById('vmPool').textContent = (c.pool || 0).toLocaleString();
+  document.getElementById('vmParticipants').textContent = c.participants || 0;
+  document.getElementById('vmBetUp').textContent = (c.betUp || 0) + '%';
+
+  // 领取区域
+  document.getElementById('vmClaimArea').innerHTML = walletConnected
+    ? `<button onclick="claimGavelReward('${c.id}')" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);margin-bottom:12px">🎁 领取 $GAVEL 奖励</button>`
+    : `<div style="text-align:center;font-size:12px;color:var(--text3);padding:6px 0 12px">连接钱包后可查看并领取押注奖励</div>`;
+
+  document.getElementById('verdictOverlay').style.display = 'flex';
+}
+
+function closeVerdictModal(e) {
+  if (!e || e.target === document.getElementById('verdictOverlay')) closeVerdictDirect();
+}
+function closeVerdictDirect() {
+  document.getElementById('verdictOverlay').style.display = 'none';
+}
+
+
 async function claimGavelReward(caseId) {
   if (!walletConnected) { showToast('请先连接钱包'); return; }
   const btn = event.target;
@@ -5435,21 +5540,67 @@ const courtData = {
       id:'C-2026-035', icon:'🐶', name:'DOGE', source:'CEX · 已结案',
       tier:'deep', tierLabel:'深审', tierCls:'cc-tier-deep',
       timer:'已结案', urgent:false,
-      betUp:78, betDown:22,
-      pool:51200, participants:418,
+      betUp:78, betDown:22, pool:51200, participants:418,
       liq:'$892M', holders:'—', change:'+12%', changeUp:true, whale:'—',
       initiator:'项目方',
       verdict:'持有', verdictCls:'vr-hold', verdictResult:'✅ 看涨方向胜出',
+      confidence:88, risk:'低风险',
+      verdictShort:'信仰坚定，社区票王，链上健康，等风来。\n巨鲸持仓稳定，无出货迹象。\n马斯克效应犹在，短期动能充足。\n本庭裁定：可小仓参与，但别忘了它涨多快、跌也多快。',
     },
     {
       id:'C-2026-034', icon:'🎩', name:'WIF', source:'CEX · 已结案',
       tier:'standard', tierLabel:'标准', tierCls:'cc-tier-standard',
       timer:'已结案', urgent:false,
-      betUp:41, betDown:59,
-      pool:12800, participants:156,
+      betUp:41, betDown:59, pool:12800, participants:156,
       liq:'$45M', holders:'—', change:'+2%', changeUp:true, whale:'—',
       initiator:'散户发起',
       verdict:'观望', verdictCls:'vr-watch', verdictResult:'⚠️ 裁定与价格分歧',
+      confidence:61, risk:'中风险',
+      verdictShort:'叙事仍在，热度回落，持仓不动静待催化。\n巨鲸出逃迹象明显，短期上行乏力。\n社区分歧加大，押注风险偏高。\n本庭裁定：观望为主，等方向选择后再介入。',
+    },
+    {
+      id:'C-2026-033', icon:'🐸', name:'PEPE', source:'CEX · 已结案',
+      tier:'fast', tierLabel:'快审', tierCls:'cc-tier-fast',
+      timer:'已结案', urgent:false,
+      betUp:55, betDown:45, pool:28600, participants:241,
+      liq:'$450M', holders:'—', change:'-8%', changeUp:false, whale:'🐳出逃',
+      initiator:'散户发起',
+      verdict:'谨慎', verdictCls:'vr-caution', verdictResult:'📉 看跌方向胜出',
+      confidence:71, risk:'高风险',
+      verdictShort:'巨鲸出逃，基本面承压，降仓观望勿追高。\n链上地址数增长停滞，新增主要来自散户。\n短期下行风险较大，建议等待放量确认。\n本庭裁定：谨慎，已有巨鲸在高位减仓。',
+    },
+    {
+      id:'C-2026-032', icon:'⚡', name:'TURBO', source:'four.meme · 已结案',
+      tier:'fast', tierLabel:'快审', tierCls:'cc-tier-fast',
+      timer:'已结案', urgent:false,
+      betUp:71, betDown:29, pool:18400, participants:198,
+      liq:'$8.2M', holders:'—', change:'+89%', changeUp:true, whale:'🐳持仓',
+      initiator:'项目方',
+      verdict:'建仓', verdictCls:'vr-hold', verdictResult:'✅ 看涨方向胜出',
+      confidence:79, risk:'中风险',
+      verdictShort:'TURBO 本次拉升由真实链上需求驱动。\n持仓地址 3 天增长 240%，筹码分散利于上涨。\n巨鲸持仓集中度低，无明显出货迹象。\n本庭裁定：可适量参与，注意仓位控制，止损设好。',
+    },
+    {
+      id:'C-2026-031', icon:'🔨', name:'BONK', source:'CEX · 已结案',
+      tier:'standard', tierLabel:'标准', tierCls:'cc-tier-standard',
+      timer:'已结案', urgent:false,
+      betUp:51, betDown:49, pool:9200, participants:87,
+      liq:'$12M', holders:'—', change:'+5%', changeUp:true, whale:'➡️持仓',
+      initiator:'散户发起',
+      verdict:'小仓', verdictCls:'vr-hold', verdictResult:'✅ 看涨方向胜出',
+      confidence:55, risk:'中风险',
+      verdictShort:'新血注入，动能充足，止损要设好。\n横盘整理形态，方向尚未明确。\n社区分歧明显，押注双方势均力敌。\n本庭裁定：小仓试水，等放量突破后再加仓。',
+    },
+    {
+      id:'C-2026-030', icon:'🪙', name:'FLOKI', source:'CEX · 已结案',
+      tier:'deep', tierLabel:'深审', tierCls:'cc-tier-deep',
+      timer:'已结案', urgent:false,
+      betUp:38, betDown:62, pool:6800, participants:64,
+      liq:'$3.1M', holders:'—', change:'-3%', changeUp:false, whale:'—',
+      initiator:'项目方',
+      verdict:'等待', verdictCls:'vr-wait', verdictResult:'📉 看跌方向胜出',
+      confidence:62, risk:'高风险',
+      verdictShort:'链上沉寂，大户减仓，无入场理由。\n项目方活跃度下降，社区热度消退。\n价格持续横盘，资金持续流出。\n本庭裁定：等待，无明确催化剂前不建议建仓。',
     },
   ],
 };
@@ -5463,9 +5614,20 @@ function switchCourtTab(tab) {
   renderCourtCards();
 }
 
+// 动态更新所有 Tab 数量
+function updateCourtTabCounts() {
+  const liveTab = document.getElementById('courtTab-live');
+  const pendingTab = document.getElementById('courtTab-pending');
+  const closedTab = document.getElementById('courtTab-closed');
+  if (liveTab) liveTab.querySelector('.court-tab-count').textContent = courtData.live.length;
+  if (pendingTab) pendingTab.querySelector('.court-tab-count').textContent = courtData.pending.length;
+  if (closedTab) closedTab.querySelector('.court-tab-count').textContent = courtData.closed.length;
+}
+
 function renderCourtCards() {
   const grid = document.getElementById('courtCardsGrid');
   if (!grid) return;
+  updateCourtTabCounts();
   const data = courtData[currentCourtTab] || [];
   if (!data.length) {
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text3);font-size:14px">暂无案件</div>`;
@@ -5488,12 +5650,21 @@ function renderCourtCards() {
       ? `<span class="cc-status cc-status-pending">⏳ 候审中</span>`
       : `<span class="cc-status cc-status-closed">✅ 已结案</span>`;
     const joinBtn = currentCourtTab === 'closed'
-      ? `<button class="cc-join-btn closed">查看判决</button>`
+      ? `<button class="cc-join-btn closed" onclick="event.stopPropagation();openVerdictModal('${c.id}')">查看裁定</button>`
       : currentCourtTab === 'pending'
       ? `<button class="cc-join-btn" style="background:var(--amber);opacity:.8;cursor:default">等待开庭</button>`
       : `<button class="cc-join-btn" onclick="event.stopPropagation();openCourtDetail('${c.id}')">参与开庭</button>`;
-    return `
-    <div class="court-card ${statusCls}" onclick="openCourtDetail('${c.id}')">
+
+    // 进行中：评委测试标注
+    const demoTag = (currentCourtTab === 'live' && c.isDemo)
+      ? `<div style="grid-column:1/-1;margin-bottom:4px;padding:8px 12px;background:linear-gradient(90deg,rgba(255,99,64,0.1),rgba(255,99,64,0.03));border:1px solid rgba(255,99,64,0.3);border-radius:10px;display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 1s infinite;display:inline-block;flex-shrink:0"></span>
+          <span style="font-size:12px;font-weight:700;color:var(--accent)">⚡ 评委测试案件</span>
+          <span style="font-size:11px;color:var(--text2)">此案件专为走通完整押注流程设计：连接钱包 → 押注 → MetaMask 签名 → BSCScan 验证</span>
+        </div>` : '';
+
+    return demoTag + `
+    <div class="court-card ${statusCls}" onclick="${currentCourtTab === 'closed' ? `openVerdictModal('${c.id}')` : `openCourtDetail('${c.id}')`}">
       <div class="cc-top">
         <div class="cc-header">
           <div class="cc-coin">
@@ -7179,7 +7350,7 @@ function buildSlideHTML(d) {
             ${shortHTML}<br>
             <strong style="color:var(--accent)">${lastLine}</strong>
           </div>
-          <details style="margin-bottom:18px" open>
+          <details style="margin-bottom:18px">
             <summary style="font-size:12px;color:rgba(255,255,255,0.3);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">▾ 完整分析</summary>
             <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.4);line-height:1.8;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08)">${(d.full||'').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}</div>
           </details>
