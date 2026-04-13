@@ -5341,8 +5341,8 @@ async function fetchFourMemeTokens() {
       if (countEl) countEl.textContent = courtData.pending.length;
     }
 
-    // 同步更新 Meme 雷达行情表
-    fetchFourMemeTableData(tokens);
+    // 同步更新 Meme 雷达行情表（用已含 icon 的 courtData.pending）
+    fetchFourMemeTableData(courtData.pending);
 
     console.log(`✅ four.meme 自动候审：已加载 ${tokens.length} 个币种`);
   } catch(e) {
@@ -6512,7 +6512,7 @@ async function fetchFourMemeTableData(tokens) {
 
       return {
         rank: i + 1,
-        icon: t.icon,
+        icon: t.icon || guessIcon(t.name || '', t.symbol || t.name || ''),
         name: t.symbol || t.name,
         source: 'four.meme',
         price: priceStr,
