@@ -3624,6 +3624,18 @@ async function claimGavelReward(caseId) {
 
 
 // 把裁定摘要哈希以 0-value tx 的 input data 形式写入链上，不依赖任何额外合约
+async function doStoreVerdict(btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ 存证中…';
+  const txHash = await storeVerdictOnChain(window._lastVerdictQ || '', window._lastVerdictParsed || {});
+  if (txHash) {
+    btn.outerHTML = `<div style="margin-top:6px;font-size:11px;color:#16a34a">🔒 已上链存证 · <a href="https://testnet.bscscan.com/tx/${txHash}" target="_blank" style="color:var(--accent)">BSCScan ↗</a></div>`;
+  } else {
+    btn.textContent = '🔒 上链存证';
+    btn.disabled = false;
+  }
+}
+
 async function storeVerdictOnChain(question, parsed) {
   if (!walletConnected || !window.ethereum?.isMetaMask) return null;
   try {
@@ -3633,7 +3645,7 @@ async function storeVerdictOnChain(question, parsed) {
     const data = '0x4d454d45' + hashHex;
     const txHash = await window.ethereum.request({
       method: 'eth_sendTransaction',
-      params: [{ from: walletAddress, to: MEME_COURT_ADDRESS, data, value: '0x0', gas: '0x5208' }]
+      params: [{ from: walletAddress, to: MEME_COURT_ADDRESS, data, value: '0x0', gas: '0x7530' }]
     });
     return txHash;
   } catch(e) { return null; } // 存证失败不影响主流程
@@ -3733,15 +3745,16 @@ async function submitAppeal() {
       ${parsed.full ? `<button class="jp-expand-btn" onclick="toggleExpand(this)">▾ 展开完整裁定</button><div class="jp-verdict-full">${parsed.full.replace(/\n/g,'<br>')}</div>` : ''}
       ${caseLink}`;
 
-    // ── 链上裁定存证（异步，不阻塞 UI）──
-    storeVerdictOnChain(q, parsed).then(txHash => {
-      if (txHash) {
-        const proofDiv = document.createElement('div');
-        proofDiv.style.cssText = 'margin-top:10px;padding:8px 10px;background:rgba(22,163,74,0.07);border:1px solid rgba(22,163,74,0.2);border-radius:8px;font-size:11px;color:var(--text-sub)';
-        proofDiv.innerHTML = `🔒 裁定已上链存证 · <a href="https://testnet.bscscan.com/tx/${txHash}" target="_blank" style="color:var(--accent)">BSCScan ↗</a>`;
-        jpBody.appendChild(proofDiv);
-      }
-    });
+    // ── 链上裁定存证（改为手动触发，不自动弹 MetaMask）──
+    if (walletConnected) {
+      const proofBtn = document.createElement('div');
+      proofBtn.style.cssText = 'margin-top:10px';
+      // 把数据挂在 window 上避免引号嵌套问题
+      window._lastVerdictQ = q;
+      window._lastVerdictParsed = parsed;
+      proofBtn.innerHTML = `<button id="verdictProofBtn" onclick="doStoreVerdict(this)" style="font-size:11px;padding:4px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text2);font-family:var(--sans)">🔒 上链存证</button>`;
+      jpBody.appendChild(proofBtn);
+    }
 
   } catch(e) {
     jpBody.innerHTML = `<div class="jp-verdict-short"><strong>本庭暂时无法审理此案。</strong><br>网络异常，请稍后再试。</div>`;
@@ -5663,8 +5676,12 @@ function renderCourtCards() {
           <span style="font-size:11px;color:var(--text2)">此案件专为走通完整押注流程设计：连接钱包 → 押注 → MetaMask 签名 → BSCScan 验证</span>
         </div>` : '';
 
+    const cardOnclick = currentCourtTab === 'closed'
+      ? `openVerdictModal('${c.id}')`
+      : `openCourtDetail('${c.id}')`;
+
     return demoTag + `
-    <div class="court-card ${statusCls}" onclick="${currentCourtTab === 'closed' ? `openVerdictModal('${c.id}')` : `openCourtDetail('${c.id}')`}">
+    <div class="court-card ${statusCls}" onclick="${cardOnclick}">
       <div class="cc-top">
         <div class="cc-header">
           <div class="cc-coin">
