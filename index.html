@@ -5196,7 +5196,144 @@ function animateCount(el,from,to,duration){
   requestAnimationFrame(step);
 }
 
-/* ══ 开庭广场 JS ══ */
+/* ══ Bitquery four.meme 自动候审队列 ══ */
+
+const BITQUERY_KEY = 'ory_at_Zg7U3I37Gfxp4D38IZEIZFKtBP9nxrJ0NcPGhLbWkZA.aAWGRoXlhg4RohesnuyJcTp71AgeYBCf7owMx5OA8bY';
+const FOURMEME_CONTRACT = '0x5c952063c7fc8610FFDB798152D69F0B9550762b';
+
+// 币种图标映射
+function guessIcon(name, symbol) {
+  const s = (symbol || name || '').toLowerCase();
+  if (s.includes('dog') || s.includes('doge') || s.includes('shib')) return '🐶';
+  if (s.includes('cat') || s.includes('neko')) return '🐱';
+  if (s.includes('pepe') || s.includes('frog')) return '🐸';
+  if (s.includes('moon')) return '🌕';
+  if (s.includes('fire') || s.includes('burn')) return '🔥';
+  if (s.includes('ai') || s.includes('bot')) return '🤖';
+  if (s.includes('ape') || s.includes('monk')) return '🦍';
+  if (s.includes('dragon') || s.includes('drag')) return '🐉';
+  if (s.includes('pig')) return '🐷';
+  if (s.includes('bear')) return '🐻';
+  if (s.includes('bull')) return '🐂';
+  if (s.includes('elon') || s.includes('musk')) return '🚀';
+  if (s.includes('trump') || s.includes('maga')) return '🦅';
+  if (s.includes('baby')) return '👶';
+  if (s.includes('punk')) return '👾';
+  if (s.includes('ninja')) return '🥷';
+  const emojis = ['⚡','🌊','🍄','💎','🎩','🔮','🦊','🌙','⭐','🎯'];
+  let hash = 0;
+  for (let i = 0; i < (symbol||'x').length; i++) hash = (symbol.charCodeAt(i) + hash * 31) & 0xffff;
+  return emojis[hash % emojis.length];
+}
+
+// 时间差转中文
+function timeAgo(isoTime) {
+  const diff = (Date.now() - new Date(isoTime)) / 1000 / 60;
+  if (diff < 60) return `${Math.floor(diff)}分钟前上线`;
+  if (diff < 1440) return `${Math.floor(diff/60)}小时前上线`;
+  return `${Math.floor(diff/1440)}天前上线`;
+}
+
+async function fetchFourMemeTokens() {
+  try {
+    const res = await fetch('https://streaming.bitquery.io/eap', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${BITQUERY_KEY}`
+      },
+      body: JSON.stringify({
+        query: `{
+          EVM(network: bsc) {
+            DEXTrades(
+              limit: {count: 60}
+              orderBy: {descending: Block_Time}
+              where: {
+                Trade: {
+                  Dex: { SmartContract: {is: "${FOURMEME_CONTRACT}"} }
+                  Sell: { Currency: { Symbol: {is: "BNB"} } }
+                }
+              }
+            ) {
+              Block { Time }
+              Trade {
+                Buy {
+                  Currency { Name Symbol SmartContract }
+                  Amount
+                }
+                Sell { Amount }
+              }
+            }
+          }
+        }`
+      })
+    });
+    const data = await res.json();
+    const trades = data?.data?.EVM?.DEXTrades || [];
+
+    // 去重 + 聚合每个币的总交易量和最新时间
+    const tokenMap = {};
+    for (const t of trades) {
+      const addr = t.Trade.Buy.Currency.SmartContract;
+      if (!addr || addr === '0x') continue;
+      if (!tokenMap[addr]) {
+        tokenMap[addr] = {
+          name: t.Trade.Buy.Currency.Name,
+          symbol: t.Trade.Buy.Currency.Symbol,
+          contract: addr,
+          time: t.Block.Time,
+          bnbVolume: 0,
+          txCount: 0,
+        };
+      }
+      tokenMap[addr].bnbVolume += parseFloat(t.Trade.Sell.Amount || 0);
+      tokenMap[addr].txCount++;
+    }
+
+    // 按交易量排序，取前 6
+    const tokens = Object.values(tokenMap)
+      .sort((a, b) => b.bnbVolume - a.bnbVolume)
+      .slice(0, 6);
+
+    if (!tokens.length) return;
+
+    // 转换成 courtData 格式并注入候审队列
+    courtData.pending = tokens.map((t, i) => ({
+      id: `FM-${t.contract.slice(2,8).toUpperCase()}`,
+      icon: guessIcon(t.name, t.symbol),
+      name: t.symbol || t.name?.slice(0, 10) || '???',
+      source: `four.meme · ${timeAgo(t.time)}`,
+      tier: 'fast', tierLabel: '快审', tierCls: 'cc-tier-fast',
+      timer: '候审中', urgent: false,
+      betUp: 0, betDown: 0,
+      pool: Math.floor(t.bnbVolume * 320 * 0.3), // BNB → $GAVEL 估算奖池
+      participants: 0,
+      liq: `${(t.bnbVolume).toFixed(2)} BNB`,
+      holders: `${t.txCount * 3}`, // 估算
+      change: '+—%', changeUp: true,
+      whale: t.txCount >= 5 ? '🐳买入' : '—',
+      initiator: 'four.meme 自动',
+      contract: t.contract,
+      bnbVolume: t.bnbVolume,
+    }));
+
+    // 如果当前在候审 tab，刷新渲染
+    if (currentCourtTab === 'pending') renderCourtCards();
+
+    // 同步更新 Tab 数量
+    const pendingTab = document.getElementById('courtTab-pending');
+    if (pendingTab) {
+      const countEl = pendingTab.querySelector('.court-tab-count');
+      if (countEl) countEl.textContent = courtData.pending.length;
+    }
+
+    console.log(`✅ four.meme 自动候审：已加载 ${tokens.length} 个币种`);
+  } catch(e) {
+    console.warn('four.meme 数据拉取失败，使用 mock 数据', e);
+  }
+}
+
+
 
 const courtData = {
   live: [
@@ -7001,6 +7138,8 @@ async function loadFeaturedData() {
 
 /* ── INIT ── */
 initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();loadFeaturedData();
+fetchFourMemeTokens();
+setInterval(fetchFourMemeTokens, 5 * 60 * 1000); // 每 5 分钟刷新
 setInterval(updateCd,60000);
 setInterval(updateBetDeadline,1000);
 // 检查 MetaMask 是否已授权
