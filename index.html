@@ -4904,6 +4904,47 @@ function showSuccess(caseNo, txHash) {
     txEl.innerHTML = `<a href="https://testnet.bscscan.com/tx/${txHash}" target="_blank" style="color:var(--accent);font-size:11px;word-break:break-all">查看链上交易 ↗</a>`;
   }
   showToast('🏛️ 开庭申请已提交！' + caseNo);
+
+  // ── 注入案件到进行中列表 ──
+  const name = document.getElementById('applyName')?.value?.trim() || '新案件';
+  const contract = document.getElementById('applyContract')?.value?.trim() || '';
+  const tierLabel = selectedTier === 'fast' ? '快审' : selectedTier === 'standard' ? '标准' : '深审';
+  const tierCls = selectedTier === 'fast' ? 'cc-tier-fast' : selectedTier === 'standard' ? 'cc-tier-standard' : 'cc-tier-deep';
+  const timer = selectedTier === 'fast' ? '23:59' : selectedTier === 'standard' ? '7天 00:00' : '30天 00:00';
+
+  const newCase = {
+    id: caseNo,
+    icon: guessIcon(name, name),
+    name: name,
+    source: contract ? `four.meme · 刚刚上线` : `散户发起 · 刚刚`,
+    tier: selectedTier,
+    tierLabel,
+    tierCls,
+    timer,
+    urgent: selectedTier === 'fast',
+    betUp: 50, betDown: 50,
+    pool: selectedTier === 'fast' ? 320 : selectedTier === 'standard' ? 1600 : 6400,
+    participants: 0,
+    liq: '—', holders: '—', change: '+—%', changeUp: true, whale: '—',
+    initiator: selectedIdentity === 'project' ? '项目方' : '散户发起',
+    contract,
+    isNew: true,
+  };
+
+  // 插入进行中列表头部
+  courtData.live.unshift(newCase);
+
+  // 持久化到 localStorage，刷新后不丢失
+  try {
+    const saved = JSON.parse(localStorage.getItem('mc_live_cases') || '[]');
+    saved.unshift(newCase);
+    localStorage.setItem('mc_live_cases', JSON.stringify(saved.slice(0, 10)));
+  } catch(e) {}
+
+  // 刷新开庭广场
+  if (typeof updateCourtTabCounts === 'function') updateCourtTabCounts();
+  if (typeof renderHotCourtCards === 'function') renderHotCourtCards();
+  if (typeof mRenderCourtList === 'function') mRenderCourtList();
 }
 
 /* ── 押注系统 ── */
@@ -7521,6 +7562,16 @@ async function loadFeaturedData() {
 initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();loadFeaturedData();
 fetchFourMemeTokens();
 setInterval(fetchFourMemeTokens, 5 * 60 * 1000); // 每 5 分钟刷新
+
+// 恢复用户申请的案件
+try {
+  const saved = JSON.parse(localStorage.getItem('mc_live_cases') || '[]');
+  if (saved.length) {
+    // 去重（避免和已有案件重复）
+    const existingIds = new Set(courtData.live.map(c => c.id));
+    saved.forEach(c => { if (!existingIds.has(c.id)) courtData.live.unshift(c); });
+  }
+} catch(e) {}
 setInterval(updateCd,60000);
 setInterval(updateBetDeadline,1000);
 // 检查 MetaMask 是否已授权
