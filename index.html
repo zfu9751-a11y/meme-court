@@ -1183,7 +1183,7 @@ textarea::placeholder{color:var(--text3)}
 .profile-connect-btn:hover{opacity:.88;transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,99,64,0.3)}
 
 /* 顶部资产总览 */
-.profile-header{margin-bottom:24px}
+.profile-header{margin-bottom:20px}
 .profile-addr-row{display:flex;align-items:center;gap:12px;margin-bottom:20px}
 .profile-avatar{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#111,#333);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
 .profile-addr{font-size:16px;font-weight:800;color:var(--text);font-family:var(--mono);letter-spacing:-0.01em}
@@ -1194,22 +1194,22 @@ textarea::placeholder{color:var(--text3)}
 .ptb-2{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
 .ptb-3{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e;border:1px solid #fcd34d}
 
-.profile-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.profile-stat-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;box-shadow:var(--shadow-sm)}
-.psc-val{font-size:22px;font-weight:900;color:var(--text);font-family:var(--mono);letter-spacing:-0.03em;margin-bottom:3px}
+.profile-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:28px}
+.profile-stat-card{background:var(--white);padding:18px 20px;border-right:1px solid var(--border)}.profile-stat-card:last-child{border-right:none}
+.psc-val{font-size:22px;font-weight:600;color:var(--text);font-family:var(--mono);letter-spacing:-0.03em;margin-bottom:4px}
 .psc-val.green{color:var(--green)}.psc-val.red{color:var(--red)}.psc-val.accent{color:var(--accent)}
-.psc-lbl{font-size:11px;color:var(--text3)}
+.psc-lbl{font-size:12px;color:var(--text2)}.psc-sub{font-size:11px;color:var(--text3);margin-top:2px}
 .psc-sub{font-size:10px;color:var(--text3);margin-top:2px}
 
 /* 主内容两列 */
-.profile-main-grid{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:24px}
+.profile-main-grid{display:grid;grid-template-columns:3fr 2fr;gap:20px;margin-bottom:28px}
 
 /* 押注记录 */
 .profile-section-title{font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .pst-count{font-size:11px;font-weight:500;color:var(--text3);background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:2px 10px}
-.bet-records{display:flex;flex-direction:column;gap:8px}
-.bet-record{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm);transition:box-shadow .15s}
-.bet-record:hover{box-shadow:var(--shadow)}
+.bet-records{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--white)}
+.bet-record{background:var(--white);padding:12px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);transition:background .12s}
+.bet-record:hover{background:var(--bg2)}.bet-record:last-child{border-bottom:none}
 .br-coin{display:flex;align-items:center;gap:8px;min-width:80px}
 .br-coin-icon{font-size:22px}
 .br-coin-name{font-size:13px;font-weight:800;color:var(--text)}
@@ -1234,37 +1234,37 @@ textarea::placeholder{color:var(--text3)}
 .vr-time{font-size:10px;color:var(--text3);font-family:var(--mono)}
 
 /* $GAVEL 等级进度卡 */
-.gavel-progress-card{background:linear-gradient(135deg,#111,#1e1e1c);border-radius:var(--radius-xl);padding:20px;margin-bottom:12px}
+.gavel-progress-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px}
 .gpc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.gpc-title{font-size:13px;font-weight:800;color:#fff}
-.gpc-tier{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:rgba(255,99,64,0.2);color:var(--accent);border:1px solid rgba(255,99,64,0.3)}
-.gpc-balance{font-size:32px;font-weight:900;color:#fff;font-family:var(--mono);letter-spacing:-0.03em;margin-bottom:4px}
-.gpc-balance-lbl{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:16px}
+.gpc-title{font-size:13px;font-weight:600;color:var(--text2)}
+.gpc-tier{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-dim)}
+.gpc-balance{font-size:32px;font-weight:600;color:var(--text);font-family:var(--mono);letter-spacing:-0.04em;margin-bottom:4px}
+.gpc-balance-lbl{font-size:11px;color:var(--text3);margin-bottom:16px}
 .gpc-progress-wrap{margin-bottom:8px}
-.gpc-progress-labels{display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:6px}
-.gpc-progress-bar{height:6px;background:rgba(255,255,255,0.1);border-radius:99px;overflow:hidden}
-.gpc-progress-fill{height:100%;background:linear-gradient(to right,var(--accent),#ff8a65);border-radius:99px;transition:width .8s ease}
-.gpc-next{font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:14px}
+.gpc-progress-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:6px}
+.gpc-progress-bar{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
+.gpc-progress-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .8s ease}
+.gpc-next{font-size:11px;color:var(--text3);margin-bottom:14px}
 .gpc-perks{display:flex;flex-direction:column;gap:5px}
-.gpc-perk{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,0.6)}
+.gpc-perk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
 .gpc-perk-icon{font-size:13px;flex-shrink:0}
-.gpc-perk.active{color:#fff}
+.gpc-perk.active{color:var(--text)}
 
 /* $GAVEL 收益历史 */
-.gavel-history-section{margin-bottom:40px}
-.gavel-history-list{display:flex;flex-direction:column;gap:0;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
+.gavel-history-section{margin-bottom:32px}
+.gavel-history-list{display:flex;flex-direction:column;gap:0;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
 .gh-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background .12s}
 .gh-item:last-child{border-bottom:none}
-.gh-item:hover{background:var(--bg)}
+.gh-item:hover{background:var(--bg2)}
 .gh-icon-wrap{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .gh-icon-win{background:var(--green-bg)}
 .gh-icon-vote{background:var(--blue-bg)}
 .gh-icon-invite{background:var(--amber-bg)}
 .gh-icon-lose{background:var(--red-bg)}
 .gh-content{flex:1;min-width:0}
-.gh-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:1px}
+.gh-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:1px}
 .gh-sub{font-size:11px;color:var(--text3)}
-.gh-amount{font-size:14px;font-weight:800;font-family:var(--mono);white-space:nowrap;flex-shrink:0}
+.gh-amount{font-size:13px;font-weight:500;font-family:var(--mono);white-space:nowrap;flex-shrink:0}
 .gh-amount.positive{color:var(--green)}
 .gh-amount.negative{color:var(--red)}
 .gh-date{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;flex-shrink:0;min-width:60px;text-align:right}
