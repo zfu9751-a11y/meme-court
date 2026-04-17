@@ -1734,130 +1734,150 @@ textarea::placeholder{color:var(--text3)}
 <div class="page" id="page-rank">
   <main class="content-wrap">
 
-    <!-- 顶部 5 格 KPI -->
-    <div class="bsc-kpi-bar">
+    <!-- KPI 4格 -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px" id="radarKpiBar">
       <div class="bsc-kpi k-accent">
-        <div class="bsc-kpi-val accent">142</div>
+        <div class="bsc-kpi-val accent" id="kpiNewCoins">142</div>
         <div class="bsc-kpi-lbl">今日 BSC 新币</div>
         <span class="bsc-kpi-delta up">↑ +18</span>
+        <canvas class="kpi-spark-canvas" id="sparkNewCoins" height="20" style="width:100%;margin-top:6px;display:block"></canvas>
       </div>
       <div class="bsc-kpi k-green">
-        <div class="bsc-kpi-val">$892M</div>
+        <div class="bsc-kpi-val green" id="kpiVolume">$892M</div>
         <div class="bsc-kpi-lbl">24h Meme 交易量</div>
         <span class="bsc-kpi-delta down">↓ -12%</span>
+        <canvas class="kpi-spark-canvas" id="sparkVolume" height="20" style="width:100%;margin-top:6px;display:block"></canvas>
       </div>
       <div class="bsc-kpi k-blue">
-        <div class="bsc-kpi-val">84,231</div>
-        <div class="bsc-kpi-lbl">活跃地址数</div>
-        <span class="bsc-kpi-delta up">↑ +3.2%</span>
-      </div>
-      <div class="bsc-kpi k-amber">
-        <div class="bsc-kpi-val green">38</div>
+        <div class="bsc-kpi-val" id="kpiFourMeme">38</div>
         <div class="bsc-kpi-lbl">four.meme 今日上线</div>
         <span class="bsc-kpi-delta up">↑ +6</span>
+        <canvas class="kpi-spark-canvas" id="sparkFourMeme" height="20" style="width:100%;margin-top:6px;display:block"></canvas>
       </div>
-      <div class="bsc-kpi k-red">
-        <div class="bsc-kpi-val amber">62</div>
+      <div class="bsc-kpi k-amber">
+        <div class="bsc-kpi-val amber" id="kpiFear">62</div>
         <div class="bsc-kpi-lbl">BSC 恐贪指数</div>
         <span class="bsc-kpi-delta neutral">贪婪</span>
+        <canvas class="kpi-spark-canvas" id="sparkFear" height="20" style="width:100%;margin-top:6px;display:block"></canvas>
       </div>
     </div>
 
-    <!-- 中间可视化区 -->
-    <div class="bsc-viz-grid">
+    <!-- 主区：折线图 + AI 侧边栏 -->
+    <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:14px">
 
-      <!-- 左：押注战况实时地图 -->
-      <div class="bsc-bubble-card" style="display:flex;flex-direction:column">
-        <div class="bsc-bubble-header">
-          <div>
-            <div class="bsc-bubble-title"><span class="live-dot" style="display:inline-block;margin-right:5px"></span>押注战况实时地图</div>
-            <div class="bsc-bubble-sub">方块宽度=奖池大小 · 绿=看涨占优 · 红=看跌占优 · 点击进入押注</div>
+      <!-- 左：实时折线图 + 押注战况 -->
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+
+        <!-- 折线图卡片 -->
+        <div class="bsc-bubble-card" style="overflow:visible">
+          <!-- 顶部选币栏 -->
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative" id="chartHeader">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0" id="coinPillsRow"></div>
+            <button id="addCoinBtn" onclick="toggleCoinDropdown()" style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;border:1px dashed var(--border2);font-size:11px;cursor:pointer;background:transparent;color:var(--text3);white-space:nowrap;font-family:var(--sans)">+ 添加币种</button>
+            <select style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text2);font-family:var(--sans)" onchange="switchTimeRange(this.value)">
+              <option value="1h">1小时</option>
+              <option value="4h">4小时</option>
+              <option value="1d">1天</option>
+            </select>
+
+            <!-- 下拉选币面板 -->
+            <div id="coinDropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--white);border:1px solid var(--border2);border-radius:var(--radius-lg);z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.1)">
+              <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+                <input id="coinSearchInput" placeholder="搜索币名或输入合约地址 0x..." oninput="filterCoinList(this.value)"
+                  style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-md);font-size:12px;font-family:var(--sans);background:var(--bg2);color:var(--text);outline:none">
+              </div>
+              <div style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.04em">🔥 four.meme 热度榜</div>
+              <div style="max-height:200px;overflow-y:auto" id="coinDropdownList"></div>
+              <div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:10px;color:var(--text3)" id="coinSelectHint">已选 0 / 最多 5 个</span>
+                <button onclick="toggleCoinDropdown()" style="font-size:11px;padding:4px 12px;border:1px solid var(--border2);border-radius:99px;background:transparent;color:var(--text2);cursor:pointer;font-family:var(--sans)">完成</button>
+              </div>
+            </div>
           </div>
-          <div style="font-size:11px;color:var(--text3)" id="battleMapMeta">— 案进行中</div>
+
+          <!-- Canvas 折线图 -->
+          <div style="padding:12px 14px 8px;position:relative">
+            <canvas id="radarLineChart" style="width:100%;display:block;cursor:crosshair" height="200"></canvas>
+            <div id="chartTooltip" style="display:none;position:absolute;background:var(--white);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;pointer-events:none;z-index:100;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.1)"></div>
+          </div>
+
+          <!-- 图例说明 -->
+          <div style="padding:6px 14px 10px;border-top:1px solid var(--border);display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)"><span style="display:inline-block;width:8px;height:8px;background:#dc2626;clip-path:polygon(50% 0%,0% 100%,100% 100%)"></span>巨鲸买入</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)"><span style="display:inline-block;width:8px;height:8px;background:#d97706;clip-path:polygon(50% 0%,0% 100%,100% 100%)"></span>风险预警</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a"></span>突破支撑</div>
+            <div id="chartLiveDot" style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><span class="live-dot"></span>实时更新 · 每10秒</div>
+          </div>
         </div>
-        <div style="padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:6px" id="battleMapBody">
-          <div style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--text3);font-size:13px">加载中…</div>
+
+        <!-- 押注战况 -->
+        <div class="bsc-bubble-card">
+          <div class="bsc-bubble-header">
+            <div>
+              <div class="bsc-bubble-title"><span class="live-dot" style="display:inline-block;margin-right:5px"></span>押注战况实时地图</div>
+              <div class="bsc-bubble-sub">方块宽度=奖池大小 · 绿=看涨占优 · 红=看跌占优</div>
+            </div>
+            <div style="font-size:11px;color:var(--text3)" id="battleMapMeta">— 案进行中</div>
+          </div>
+          <div style="padding:12px 16px;display:flex;flex-direction:column;gap:6px" id="battleMapBody">
+            <div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">加载中…</div>
+          </div>
         </div>
-        <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:14px;align-items:center">
-          <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#16a34a;display:inline-block"></span>看涨占优</div>
-          <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#dc2626;display:inline-block"></span>看跌占优</div>
-          <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#888;display:inline-block"></span>候审中</div>
-          <span style="margin-left:auto;font-size:10px;color:var(--text3)">方块宽度 ∝ 奖池大小</span>
-        </div>
+
       </div>
 
-      <!-- 右：成交量条形图 + 市场结构饼图 -->
-      <div class="bsc-right-charts">
-        <div class="bsc-bar-card">
-          <div class="bsc-chart-header">
-            <div class="bsc-chart-title">24h 成交量 Top 8</div>
-            <div class="bsc-chart-sub">BSC Meme 项目交易量排名</div>
-          </div>
-          <div class="bsc-bar-body" id="bscBarChart"></div>
-        </div>
-        <div class="bsc-pie-card">
-          <div class="bsc-chart-header">
-            <div class="bsc-chart-title">市场结构分布</div>
-            <div class="bsc-chart-sub">今日新币来源占比</div>
-          </div>
-          <div class="bsc-pie-body">
-            <canvas id="bscPieChart" width="120" height="120"></canvas>
-            <div class="bsc-pie-legend" id="bscPieLegend"></div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- 链上动态流（双列） -->
-    <div class="bsc-feed-card">
-      <div class="bsc-feed-header">
-        <div class="bsc-feed-title">⚡ 链上动态流</div>
-        <div class="bsc-feed-live"><span class="live-dot"></span>实时更新</div>
-      </div>
-      <div class="bsc-feed-grid">
-        <div class="bsc-feed-col">
-          <div class="bsc-feed-col-title">买入 · 新币 · 热度</div>
-          <div class="bsc-feed-scroll" id="bscFeedLeft"></div>
-        </div>
-        <div class="bsc-feed-col">
-          <div class="bsc-feed-col-title">巨鲸 · 风险 · 预警</div>
-          <div class="bsc-feed-scroll" id="bscFeedRight"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 底部行情表 -->
-    <div class="bsc-table-card">
-      <div class="bsc-table-header">
+      <!-- 右：AI 法官实时裁定侧边栏 -->
+      <div id="aiSidePanel" style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius-xl);padding:14px;display:flex;flex-direction:column;gap:12px;position:sticky;top:68px;max-height:calc(100vh - 80px);overflow-y:auto;scrollbar-width:none">
         <div>
-          <div class="bsc-table-title">BSC Meme 行情表</div>
-          <div class="bsc-table-filter">
-            <button class="bsc-table-filter-btn active" id="tbFilter-fourmeme" onclick="switchTbFilter('fourmeme')">four.meme 优先</button>
-            <button class="bsc-table-filter-btn" id="tbFilter-bsc" onclick="switchTbFilter('bsc')">全 BSC</button>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span class="live-dot"></span>
+            <span style="font-size:12px;font-weight:700;color:var(--text2)">AI 法官实时裁定</span>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">点击曲线切换分析币种</div>
+        </div>
+
+        <!-- 选中币信息 -->
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:var(--radius-md)">
+          <div id="aiSideCoinIcon" style="width:28px;height:28px;border-radius:8px;background:#fef3ee;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">⚖️</div>
+          <div style="flex:1;min-width:0">
+            <div id="aiSideCoinName" style="font-size:13px;font-weight:800;color:var(--text)">选择一个币种</div>
+            <div style="margin-top:3px" id="aiSideVerdictBadge"></div>
           </div>
         </div>
-        <div class="bsc-table-tabs">
-          <button class="bsc-table-tab active" id="tbTab-hot" onclick="switchTbTab('hot')">🔥 热度榜</button>
-          <button class="bsc-table-tab" id="tbTab-gain" onclick="switchTbTab('gain')">📈 涨幅榜</button>
-          <button class="bsc-table-tab" id="tbTab-new" onclick="switchTbTab('new')">✨ 新币榜</button>
+
+        <!-- 链上数据 -->
+        <div id="aiSideMetrics" style="display:flex;flex-direction:column;gap:0">
+          <div style="text-align:center;font-size:11px;color:var(--text3);padding:8px 0">点击图表上的曲线<br>触发 AI 法官分析</div>
+        </div>
+
+        <!-- 置信度 -->
+        <div id="aiSideConfWrap" style="display:none">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:4px">
+            <span>置信度</span><span id="aiSideConfVal" style="color:var(--text);font-weight:700">—</span>
+          </div>
+          <div style="height:3px;background:var(--border);border-radius:99px;overflow:hidden">
+            <div id="aiSideConfBar" style="height:100%;background:var(--green);border-radius:99px;width:0%;transition:width .6s"></div>
+          </div>
+        </div>
+
+        <!-- 裁定文字 -->
+        <div id="aiSideText" style="display:none;font-size:11px;color:var(--text2);line-height:1.7;padding:8px 10px;background:var(--bg2);border-radius:var(--radius-md);border-left:2px solid var(--accent)"></div>
+
+        <!-- 前往押注 -->
+        <button id="aiSideBetBtn" style="display:none;width:100%;padding:8px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans)" onclick="aiSideGoBet()">⚖️ 前往押注</button>
+
+        <!-- 加载状态 -->
+        <div id="aiSideLoading" style="display:none;text-align:center;padding:12px 0">
+          <div class="jp-dots" style="justify-content:center"><span></span><span></span><span></span></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">AI 法官分析中…</div>
         </div>
       </div>
-      <div class="bsc-table-thead">
-        <div class="bsc-table-th">#</div>
-        <div class="bsc-table-th"></div>
-        <div class="bsc-table-th">项目</div>
-        <div class="bsc-table-th right">价格</div>
-        <div class="bsc-table-th right">24h涨跌</div>
-        <div class="bsc-table-th right">交易量</div>
-        <div class="bsc-table-th right">流动性</div>
-        <div class="bsc-table-th right">持仓数</div>
-      </div>
-      <div id="bscTableList"></div>
+
     </div>
 
   </main>
 </div>
+
 <div class="cert-overlay" id="certOverlay" onclick="closeCertModal(event)">
   <div class="cert-modal" id="certModal">
 
@@ -7715,7 +7735,486 @@ async function loadFeaturedDataFallback() {
   if (results.length >= 3) { try { localStorage.setItem('memecourt_featured_v2_'+new Date().toLocaleDateString('zh-CN'), JSON.stringify(results)); } catch(e) {} initFeaturedCarousel(results); }
 }
 
-/* ── INIT ── */
+/* ══ Meme 雷达折线图系统 ══ */
+
+const COIN_COLORS = ['#e8571a','#639922','#378add','#7f77dd','#ba7517'];
+const COIN_POOL = {}; // 币种数据池：key=address, {name,color,pts,annotations,aiData}
+let radarSelected = null; // 当前选中的币种 key
+let radarAnimFrame = null;
+let radarTick = 0;
+let radarTimeRange = '1h';
+let radarHoverX = null;
+
+// 初始化默认4个币种（从 courtData.pending 拿真实数据）
+function initRadarCoins() {
+  const colors = COIN_COLORS;
+  const sources = courtData.pending.slice(0, 4);
+  sources.forEach((c, i) => {
+    const key = c.contract || c.id;
+    if (!COIN_POOL[key]) {
+      COIN_POOL[key] = {
+        key, name: c.name, icon: c.icon, iconImg: c.iconImg || null,
+        color: colors[i % colors.length],
+        contract: c.contract,
+        pts: genRadarPoints(i * 1.3, 60, 100, 10),
+        annotations: [],
+        aiData: null,
+        change: c.change, changeUp: c.changeUp,
+        liq: c.liq, holders: c.holders,
+      };
+    }
+  });
+  renderCoinPills();
+  if (!radarSelected && Object.keys(COIN_POOL).length > 0) {
+    radarSelected = Object.keys(COIN_POOL)[0];
+  }
+  renderCoinDropdownList();
+}
+
+function genRadarPoints(seed, n, base, vol) {
+  const pts = [];
+  let v = base;
+  for (let i = 0; i < n; i++) {
+    v += Math.sin(i * 0.3 + seed) * vol * 0.5 + (Math.random() - 0.48) * vol;
+    pts.push(Math.max(0.5, v));
+  }
+  return pts;
+}
+
+// 渲染 pill
+function renderCoinPills() {
+  const row = document.getElementById('coinPillsRow');
+  if (!row) return;
+  const addBtn = document.getElementById('addCoinBtn');
+  row.querySelectorAll('.radar-pill').forEach(p => p.remove());
+  Object.values(COIN_POOL).forEach(c => {
+    const pill = document.createElement('div');
+    pill.className = 'radar-pill';
+    pill.dataset.key = c.key;
+    const isActive = c.key === radarSelected;
+    pill.style.cssText = `display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:99px;border:${isActive?'1.5':'0.5'}px solid ${isActive?c.color:'var(--border2)'};font-size:11px;cursor:pointer;background:var(--white);color:${isActive?c.color:'var(--text3)'};transition:all .15s;white-space:nowrap`;
+    pill.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:${c.color};flex-shrink:0;display:inline-block"></span>${c.name}<span onclick="removeRadarCoin('${c.key}',event)" style="width:13px;height:13px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--border);font-size:9px;color:var(--text3);margin-left:2px;cursor:pointer">×</span>`;
+    pill.addEventListener('click', () => selectRadarCoin(c.key));
+    row.insertBefore(pill, addBtn);
+  });
+  updateCoinSelectHint();
+}
+
+function removeRadarCoin(key, e) {
+  e.stopPropagation();
+  if (Object.keys(COIN_POOL).length <= 1) return;
+  delete COIN_POOL[key];
+  if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0] || null;
+  renderCoinPills();
+  renderCoinDropdownList();
+}
+
+function selectRadarCoin(key) {
+  radarSelected = key;
+  renderCoinPills();
+  triggerAISidePanel(key);
+}
+
+// 下拉列表
+function toggleCoinDropdown() {
+  const dd = document.getElementById('coinDropdown');
+  if (!dd) return;
+  const isOpen = dd.style.display !== 'none';
+  dd.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) document.getElementById('coinSearchInput')?.focus();
+}
+
+function filterCoinList(val) {
+  document.querySelectorAll('.dd-coin-item').forEach(item => {
+    const name = item.dataset.name?.toLowerCase() || '';
+    item.style.display = name.includes(val.toLowerCase()) || val === '' ? '' : 'none';
+  });
+}
+
+function renderCoinDropdownList() {
+  const list = document.getElementById('coinDropdownList');
+  if (!list) return;
+  const allCoinsForDropdown = [
+    ...Object.values(COIN_POOL),
+    ...courtData.pending.filter(c => !COIN_POOL[c.contract || c.id]).map((c, i) => ({
+      key: c.contract || c.id, name: c.name, icon: c.icon, iconImg: c.iconImg,
+      contract: c.contract, color: COIN_COLORS[i % COIN_COLORS.length],
+      change: c.change, changeUp: c.changeUp,
+    }))
+  ];
+  list.innerHTML = allCoinsForDropdown.map(c => {
+    const inPool = !!COIN_POOL[c.key];
+    const changeColor = c.changeUp ? 'var(--green)' : 'var(--red)';
+    return `<div class="dd-coin-item" data-key="${c.key}" data-name="${c.name}" onclick="toggleDropdownCoin('${c.key}')"
+      style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .1s;background:${inPool?'var(--accent-bg)':''}">
+      <div style="width:26px;height:26px;border-radius:7px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${c.icon || '⚖️'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">${c.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${c.contract ? c.contract.slice(0,10)+'...' : 'four.meme'}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;color:${changeColor}">${c.change || '—'}</span>
+      <div style="width:16px;height:16px;border-radius:4px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;${inPool?'background:var(--accent);border-color:var(--accent);color:#fff':''}">${inPool?'✓':''}</div>
+    </div>`;
+  }).join('');
+  updateCoinSelectHint();
+}
+
+function toggleDropdownCoin(key) {
+  if (COIN_POOL[key]) {
+    if (Object.keys(COIN_POOL).length <= 1) return;
+    delete COIN_POOL[key];
+    if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0] || null;
+  } else {
+    if (Object.keys(COIN_POOL).length >= 5) { showToast('最多同时显示 5 个币种'); return; }
+    const src = courtData.pending.find(c => (c.contract || c.id) === key);
+    if (src) {
+      const idx = Object.keys(COIN_POOL).length;
+      COIN_POOL[key] = {
+        key, name: src.name, icon: src.icon, iconImg: src.iconImg,
+        color: COIN_COLORS[idx % COIN_COLORS.length],
+        contract: src.contract, pts: genRadarPoints(idx * 1.7, 60, 100, 10),
+        annotations: [], aiData: null,
+        change: src.change, changeUp: src.changeUp,
+        liq: src.liq, holders: src.holders,
+      };
+      if (!radarSelected) radarSelected = key;
+    }
+  }
+  renderCoinPills();
+  renderCoinDropdownList();
+}
+
+function updateCoinSelectHint() {
+  const hint = document.getElementById('coinSelectHint');
+  if (hint) hint.textContent = `已选 ${Object.keys(COIN_POOL).length} / 最多 5 个`;
+}
+
+function switchTimeRange(val) { radarTimeRange = val; }
+
+// 关闭下拉
+document.addEventListener('click', e => {
+  if (!e.target.closest('#coinDropdown') && !e.target.closest('#addCoinBtn')) {
+    const dd = document.getElementById('coinDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+// ── 折线图渲染 ──
+function drawRadarChart() {
+  const canvas = document.getElementById('radarLineChart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth;
+  const H = 200;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { top: 16, right: 20, bottom: 28, left: 42 };
+  const iw = W - pad.left - pad.right;
+  const ih = H - pad.top - pad.bottom;
+
+  const coins = Object.values(COIN_POOL);
+  if (!coins.length) return;
+
+  const allVals = coins.flatMap(c => c.pts);
+  const minV = Math.min(...allVals) * 0.92;
+  const maxV = Math.max(...allVals) * 1.06;
+
+  // 网格
+  ctx.strokeStyle = 'rgba(128,128,128,0.1)'; ctx.lineWidth = 0.5;
+  [0,25,50,75,100].forEach(p => {
+    const y = pad.top + ih * (1 - p/100);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left+iw, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(128,128,128,0.45)'; ctx.font = '9px monospace';
+    ctx.textAlign = 'right'; ctx.fillText(p, pad.left-5, y+3);
+  });
+
+  // 时间轴
+  ctx.fillStyle = 'rgba(128,128,128,0.45)'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  const tLabels = radarTimeRange === '1h' ? ['60m前','45m前','30m前','15m前','现在'] : radarTimeRange === '4h' ? ['4h前','3h前','2h前','1h前','现在'] : ['7天前','5天前','3天前','1天前','现在'];
+  tLabels.forEach((t, i) => { ctx.fillText(t, pad.left + iw*(i/4), H-6); });
+
+  // 绘制曲线（非选中先画，选中后画）
+  [...coins].sort((a,b) => (a.key===radarSelected?1:-1)).forEach(c => {
+    const n = c.pts.length;
+    const isSelected = c.key === radarSelected;
+    ctx.globalAlpha = isSelected ? 1 : 0.18;
+    ctx.lineWidth = isSelected ? 2.5 : 1;
+    ctx.strokeStyle = c.color;
+    ctx.beginPath();
+    c.pts.forEach((v, i) => {
+      const x = pad.left + iw*(i/(n-1));
+      const y = pad.top + ih*(1-(v-minV)/(maxV-minV));
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    if (isSelected) {
+      // 填充
+      ctx.globalAlpha = 0.06; ctx.fillStyle = c.color;
+      ctx.beginPath();
+      c.pts.forEach((v,i) => {
+        const x=pad.left+iw*(i/(n-1)), y=pad.top+ih*(1-(v-minV)/(maxV-minV));
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      });
+      ctx.lineTo(pad.left+iw, pad.top+ih); ctx.lineTo(pad.left, pad.top+ih); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // AI 标注
+      (c.annotations||[]).forEach(a => {
+        const v = c.pts[a.i] || c.pts[c.pts.length-1];
+        const x = pad.left+iw*(a.i/(n-1));
+        const y = pad.top+ih*(1-(v-minV)/(maxV-minV));
+        if (a.type==='whale') {
+          ctx.fillStyle='#dc2626';
+          ctx.beginPath(); ctx.moveTo(x,y-14); ctx.lineTo(x-5,y-6); ctx.lineTo(x+5,y-6); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha=0.15; ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+        } else if (a.type==='warn') {
+          ctx.fillStyle='#d97706';
+          ctx.beginPath(); ctx.moveTo(x,y-12); ctx.lineTo(x-5,y-4); ctx.lineTo(x+5,y-4); ctx.closePath(); ctx.fill();
+        } else {
+          ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+        }
+      });
+
+      // 最新价格点闪烁
+      const lastV = c.pts[c.pts.length-1];
+      const lx=pad.left+iw, ly=pad.top+ih*(1-(lastV-minV)/(maxV-minV));
+      const pulse = 0.4+0.4*Math.sin(radarTick*0.15);
+      ctx.globalAlpha=pulse*0.4; ctx.fillStyle=c.color;
+      ctx.beginPath(); ctx.arc(lx,ly,9,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1; ctx.fillStyle=c.color;
+      ctx.beginPath(); ctx.arc(lx,ly,3.5,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  });
+
+  // hover 竖线
+  if (radarHoverX !== null) {
+    ctx.strokeStyle='rgba(128,128,128,0.3)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(radarHoverX,pad.top); ctx.lineTo(radarHoverX,pad.top+ih); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+// hover 交互
+function initRadarChartEvents() {
+  const canvas = document.getElementById('radarLineChart');
+  if (!canvas) return;
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    radarHoverX = x;
+    const tooltip = document.getElementById('chartTooltip');
+    if (tooltip) {
+      const pad = { left: 42, right: 20 };
+      const iw = rect.width - pad.left - pad.right;
+      const idx = Math.round((x - pad.left) / iw * 59);
+      if (idx >= 0 && idx <= 59) {
+        const lines = Object.values(COIN_POOL).map(c => {
+          const v = c.pts[idx] || 0;
+          return `<span style="color:${c.color};font-weight:700">${c.name}</span> ${v.toFixed(1)}`;
+        }).join('<br>');
+        tooltip.innerHTML = lines;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (x + 10) + 'px';
+        tooltip.style.top = '20px';
+      }
+    }
+  });
+  canvas.addEventListener('mouseleave', () => {
+    radarHoverX = null;
+    const t = document.getElementById('chartTooltip');
+    if (t) t.style.display = 'none';
+  });
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pad = { left: 42, right: 20 };
+    const iw = rect.width - pad.left - pad.right;
+    const coins = Object.values(COIN_POOL);
+    if (!coins.length) return;
+    const allVals = coins.flatMap(c => c.pts);
+    const minV = Math.min(...allVals)*0.92, maxV = Math.max(...allVals)*1.06;
+    const ih = 200 - 16 - 28;
+    const idx = Math.round((x - pad.left) / iw * 59);
+    let closest = null, minDist = Infinity;
+    coins.forEach(c => {
+      if (idx < 0 || idx >= c.pts.length) return;
+      const v = c.pts[idx];
+      const cy = 16 + ih*(1-(v-minV)/(maxV-minV));
+      const cy2 = e.clientY - rect.top;
+      const dist = Math.abs(cy - cy2);
+      if (dist < minDist) { minDist = dist; closest = c.key; }
+    });
+    if (closest && minDist < 30) selectRadarCoin(closest);
+  });
+}
+
+// ── AI 侧边栏 ──
+async function triggerAISidePanel(key) {
+  const c = COIN_POOL[key];
+  if (!c) return;
+
+  // 更新头部
+  document.getElementById('aiSideCoinIcon').textContent = c.icon || '⚖️';
+  document.getElementById('aiSideCoinIcon').style.background = '#f5f4f0';
+  document.getElementById('aiSideCoinName').textContent = c.name;
+  document.getElementById('aiSideVerdictBadge').innerHTML = '';
+  document.getElementById('aiSideMetrics').innerHTML = '';
+  document.getElementById('aiSideConfWrap').style.display = 'none';
+  document.getElementById('aiSideText').style.display = 'none';
+  document.getElementById('aiSideBetBtn').style.display = 'none';
+  document.getElementById('aiSideLoading').style.display = 'block';
+
+  // 如果已有缓存裁定直接用
+  if (c.aiData) {
+    renderAISideData(c);
+    return;
+  }
+
+  // 调 AI 分析
+  try {
+    const sys = `你是 Meme 法庭的 AI 法官「链上包公」。严格按 JSON 输出：{"verdict":"BULLISH或BEARISH或NEUTRAL","confidence":数字0到100,"risk":"低风险或中风险或高风险或极高风险","short":"3句精简裁定用\\n分隔最后一句扎心"}`;
+    const prompt = `对 four.meme 上的 ${c.name} 进行裁定。流动性：${c.liq||'—'}，涨跌幅：${c.change||'—'}，持仓地址：${c.holders||'—'}`;
+    const raw = await callGemini(sys, prompt);
+    const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    c.aiData = parsed;
+
+    // 根据裁定添加标注
+    c.annotations = [];
+    if (parsed.verdict === 'BEARISH') {
+      c.annotations.push({i:Math.floor(c.pts.length*0.6), type:'warn'});
+      c.annotations.push({i:Math.floor(c.pts.length*0.8), type:'warn'});
+    } else if (parsed.verdict === 'BULLISH') {
+      c.annotations.push({i:Math.floor(c.pts.length*0.4), type:'whale'});
+      c.annotations.push({i:Math.floor(c.pts.length*0.75), type:'break'});
+    }
+  } catch(e) {
+    c.aiData = { verdict:'NEUTRAL', confidence:50, risk:'中风险', short:'本庭暂时无法审理此案。\n数据不足，持续观察。\n谨慎为上。' };
+  }
+  renderAISideData(c);
+}
+
+function renderAISideData(c) {
+  const d = c.aiData;
+  document.getElementById('aiSideLoading').style.display = 'none';
+
+  // 裁定徽标
+  const verdictColor = d.verdict==='BULLISH'?'var(--green)':d.verdict==='BEARISH'?'var(--red)':'var(--amber)';
+  const verdictBg = d.verdict==='BULLISH'?'var(--green-bg)':d.verdict==='BEARISH'?'var(--red-bg)':'var(--amber-bg)';
+  const verdictText = d.verdict==='BULLISH'?'📈 看涨':d.verdict==='BEARISH'?'📉 看跌':'⚖️ 中立';
+  document.getElementById('aiSideVerdictBadge').innerHTML = `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${verdictBg};color:${verdictColor}">${verdictText}</span>`;
+
+  // 链上数据
+  const metrics = [
+    {lbl:'流动性', val: c.liq||'—'},
+    {lbl:'涨跌幅', val: c.change||'—', color: c.changeUp?'var(--green)':'var(--red)'},
+    {lbl:'持仓地址', val: c.holders||'—'},
+    {lbl:'风险等级', val: d.risk, color: d.risk==='高风险'||d.risk==='极高风险'?'var(--amber)':'var(--text)'},
+    {lbl:'AI 标注', val: `${c.annotations.length} 个`},
+  ];
+  document.getElementById('aiSideMetrics').innerHTML = metrics.map(m =>
+    `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:0.5px solid var(--border)">
+      <span style="color:var(--text3)">${m.lbl}</span>
+      <span style="color:${m.color||'var(--text)'}${m.color?'':''}">${m.val}</span>
+    </div>`
+  ).join('') + '<div style="height:1px"></div>';
+
+  // 置信度
+  const confWrap = document.getElementById('aiSideConfWrap');
+  confWrap.style.display = 'block';
+  document.getElementById('aiSideConfVal').textContent = d.confidence + '%';
+  document.getElementById('aiSideConfBar').style.width = d.confidence + '%';
+  document.getElementById('aiSideConfBar').style.background = d.verdict==='BULLISH'?'var(--green)':d.verdict==='BEARISH'?'var(--red)':'var(--amber)';
+
+  // 裁定文字
+  const lines = (d.short||'').split('\n').filter(Boolean);
+  const last = lines.pop()||'';
+  const textEl = document.getElementById('aiSideText');
+  textEl.style.display = 'block';
+  textEl.innerHTML = lines.map(l=>`<span style="color:var(--text2)">${l}</span>`).join('<br>') + (lines.length?'<br>':'') + `<strong style="color:var(--accent)">${last}</strong>`;
+
+  // 押注按钮
+  document.getElementById('aiSideBetBtn').style.display = 'block';
+}
+
+function aiSideGoBet() {
+  const c = COIN_POOL[radarSelected];
+  if (!c) return;
+  const caseInLive = courtData.live.find(x => x.contract === c.contract || x.name === c.name);
+  if (caseInLive) {
+    showPage('court');
+    setTimeout(() => openCourtDetail(caseInLive.id), 300);
+  } else {
+    showPage('court');
+    showToast('该币种尚未开庭，可申请开庭');
+  }
+}
+
+// ── KPI Sparkline ──
+function drawSparkline(canvasId, data, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  const W = canvas.offsetWidth||100, H = 20;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const mn = Math.min(...data), mx = Math.max(...data);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  data.forEach((v,i) => {
+    const x = W*(i/(data.length-1));
+    const y = H*(1-(v-mn)/(mx-mn||1))*0.85+H*0.05;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+
+function initKpiSparklines() {
+  drawSparkline('sparkNewCoins', [95,108,120,115,132,128,142], '#e8571a');
+  drawSparkline('sparkVolume',   [1020,980,1100,892,950,880,892], '#16a34a');
+  drawSparkline('sparkFourMeme', [22,28,25,32,30,36,38], '#2563eb');
+  drawSparkline('sparkFear',     [45,50,55,60,58,64,62], '#d97706');
+}
+
+// ── 动画循环 ──
+function radarAnimLoop() {
+  radarTick++;
+  if (radarTick % 4 === 0) {
+    Object.values(COIN_POOL).forEach(c => {
+      const last = c.pts[c.pts.length-1];
+      c.pts.push(Math.max(0.5, last + (Math.random()-0.47)*8));
+      if (c.pts.length > 60) c.pts.shift();
+    });
+  }
+  drawRadarChart();
+  radarAnimFrame = requestAnimationFrame(radarAnimLoop);
+}
+
+function initRadarPage() {
+  if (radarAnimFrame) cancelAnimationFrame(radarAnimFrame);
+  initRadarCoins();
+  initKpiSparklines();
+  initRadarChartEvents();
+  radarAnimLoop();
+}
+
+// 切换到雷达页时初始化
+const _origShowPage = showPage;
+window.showPage = function(id) {
+  _origShowPage(id);
+  if (id === 'rank') {
+    setTimeout(initRadarPage, 50);
+  } else {
+    if (radarAnimFrame) { cancelAnimationFrame(radarAnimFrame); radarAnimFrame = null; }
+  }
+};
+
+
 initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();loadFeaturedData();
 fetchFourMemeTokens();
 setInterval(fetchFourMemeTokens, 5 * 60 * 1000); // 每 5 分钟刷新
