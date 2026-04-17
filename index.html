@@ -7960,26 +7960,18 @@ function drawRadarChart() {
   if (!coins.length) return;
 
   const VISIBLE_PTS = 80;
-  // 每点像素宽度，最新点锚定在 82% 处，右侧留 18% 空白
   const ANCHOR = 0.82;
   const pxPerPt = (iw * ANCHOR) / (VISIBLE_PTS - 1);
+  const subPx = radarScrollOffset % pxPerPt;
 
-  // 滚动偏移：每帧 radarScrollOffset 递增，超过一个点间距后相当于整体左移一格
-  const ptOffset = radarScrollOffset / pxPerPt; // 已滚动了多少个点的距离
-  const subPxOffset = radarScrollOffset % pxPerPt; // 当前帧在两点间的插值
-
-  // 价格范围：取可见点
   const visibleVals = coins.flatMap(c => c.pts.slice(-VISIBLE_PTS));
   const rawMin = Math.min(...visibleVals);
   const rawMax = Math.max(...visibleVals);
-  const rangePad = (rawMax - rawMin) * 0.18 || 8;
-  const minV = rawMin - rangePad;
-  const maxV = rawMax + rangePad;
+  const rPad = (rawMax - rawMin) * 0.18 || 8;
+  const minV = rawMin - rPad, maxV = rawMax + rPad;
   const rangeV = maxV - minV;
   const getY = v => pad.top + ih * (1 - (v - minV) / rangeV);
-
-  // X坐标：最新点锚在 pad.left + iw*ANCHOR，往左按 pxPerPt 排，subPxOffset 做连续偏移
-  const getX = idxFromEnd => pad.left + iw * ANCHOR - idxFromEnd * pxPerPt + subPxOffset;
+  const getX = idxFromEnd => pad.left + iw * ANCHOR + subPx - idxFromEnd * pxPerPt;
 
   // 水平网格线 + Y轴标签
   ctx.strokeStyle = 'rgba(128,128,128,0.07)'; ctx.lineWidth = 0.5;
@@ -7992,19 +7984,21 @@ function drawRadarChart() {
     ctx.fillText(v.toFixed(1), pad.left - 5, y + 3);
   }
 
-  // 垂直网格线（随滚动移动）
+  // 垂直滚动网格线
   ctx.strokeStyle = 'rgba(128,128,128,0.05)'; ctx.lineWidth = 0.5;
   const gridPx = pxPerPt * 8;
-  for (let gx = (pad.left + subPxOffset) % gridPx + pad.left; gx < pad.left + iw; gx += gridPx) {
+  const gStart = ((pad.left + subPx) % gridPx + gridPx) % gridPx + pad.left;
+  for (let gx = gStart; gx < pad.left + iw * ANCHOR; gx += gridPx) {
     ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + ih); ctx.stroke();
   }
 
-  // 时间轴标签（跟随滚动）
+  // 时间轴
   ctx.fillStyle = 'rgba(128,128,128,0.45)'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
   const secPerPt = RADAR_PT_INTERVAL / 1000;
+  const ptsScrolled = radarScrollOffset / pxPerPt;
   for (let i = 0; i <= 4; i++) {
     const x = pad.left + iw * ANCHOR * (i / 4);
-    const ptsAgo = Math.round((1 - i / 4) * VISIBLE_PTS + ptOffset);
+    const ptsAgo = (1 - i / 4) * VISIBLE_PTS + ptsScrolled;
     const secAgo = ptsAgo * secPerPt;
     const label = i === 4 ? '现在' : secAgo < 60 ? `${Math.round(secAgo)}s前` : `${Math.round(secAgo / 60)}m前`;
     ctx.fillText(label, x, H - 6);
@@ -8013,17 +8007,17 @@ function drawRadarChart() {
   // 裁剪绘图区
   ctx.save();
   ctx.beginPath();
-  ctx.rect(pad.left, pad.top, iw * ANCHOR + pxPerPt, ih); // 右侧多留一点防裁剪最新点
+  ctx.rect(pad.left, pad.top, iw + 2, ih);
   ctx.clip();
 
-  // 非选中先画，选中后画
   [...coins].sort((a, b) => (a.key === radarSelected ? 1 : -1)).forEach(c => {
-    const pts = c.pts.slice(-(VISIBLE_PTS + 2)); // 多取几个防止左侧截断
+    const extraLeft = 10;
+    const pts = c.pts.slice(-(VISIBLE_PTS + extraLeft + 1));
     const n = pts.length;
     if (n < 2) return;
     const isSelected = c.key === radarSelected;
 
-    ctx.globalAlpha = isSelected ? 1 : 0.07;
+    ctx.globalAlpha = isSelected ? 1 : 0.04;
     ctx.lineWidth = isSelected ? 1.8 : 0.8;
     ctx.strokeStyle = c.color;
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -8038,7 +8032,6 @@ function drawRadarChart() {
     ctx.stroke();
 
     if (isSelected) {
-      // 填充
       ctx.globalAlpha = 0.05; ctx.fillStyle = c.color;
       ctx.beginPath();
       pts.forEach((v, i) => {
@@ -8050,59 +8043,57 @@ function drawRadarChart() {
       ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
 
-      // AI 标注
       (c.annotations || []).forEach(a => {
         const relIdx = c.pts.length - 1 - a.i;
-        if (relIdx < 0 || relIdx >= n) return;
         const ptIdx = n - 1 - relIdx;
-        const x = getX(relIdx), y = getY(pts[ptIdx] || pts[n-1]);
+        if (ptIdx < 0 || ptIdx >= n) return;
+        const x = getX(relIdx), y = getY(pts[ptIdx]);
         if (a.type === 'whale') {
           ctx.fillStyle = '#dc2626';
-          ctx.beginPath(); ctx.moveTo(x, y-11); ctx.lineTo(x-4, y-4); ctx.lineTo(x+4, y-4); ctx.closePath(); ctx.fill();
-          ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.moveTo(x,y-11); ctx.lineTo(x-4,y-4); ctx.lineTo(x+4,y-4); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha=0.12; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
         } else if (a.type === 'warn') {
           ctx.fillStyle = '#d97706';
-          ctx.beginPath(); ctx.moveTo(x, y-10); ctx.lineTo(x-4, y-3); ctx.lineTo(x+4, y-3); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x,y-10); ctx.lineTo(x-4,y-3); ctx.lineTo(x+4,y-3); ctx.closePath(); ctx.fill();
         } else {
-          ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
         }
       });
 
-      // 最新点闪烁
       const lastV = pts[n - 1];
       const lx = getX(0), ly = getY(lastV);
-      const pulse = 0.2 + 0.2 * Math.sin(radarTick * 0.08);
+      const pulse = 0.18 + 0.18 * Math.sin(radarTick * 0.08);
       ctx.globalAlpha = pulse; ctx.fillStyle = c.color;
       ctx.beginPath(); ctx.arc(lx, ly, 10, 0, Math.PI*2); ctx.fill();
       ctx.globalAlpha = 1; ctx.fillStyle = c.color;
       ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI*2); ctx.fill();
     }
-
     ctx.globalAlpha = 1;
   });
 
   ctx.restore();
 
-  // 右侧价格标签（右侧留白区）
+  // 右侧价格标签（平滑Y坐标防抖动）
   coins.forEach(c => {
     const pts = c.pts.slice(-VISIBLE_PTS);
     const lastV = pts[pts.length - 1];
-    const ly = getY(lastV);
+    const targetY = getY(lastV);
+    if (radarLabelY[c.key] === undefined) radarLabelY[c.key] = targetY;
+    radarLabelY[c.key] += (targetY - radarLabelY[c.key]) * 0.08;
+    const ly = radarLabelY[c.key];
     const isSelected = c.key === radarSelected;
-    ctx.globalAlpha = isSelected ? 1 : 0.45;
-    // 虚线连接
+    const anchorX = pad.left + iw * ANCHOR;
+    ctx.globalAlpha = isSelected ? 1 : 0.4;
     ctx.strokeStyle = c.color; ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
-    ctx.beginPath(); ctx.moveTo(pad.left + iw * ANCHOR + 4, ly); ctx.lineTo(pad.left + iw * ANCHOR + 16, ly); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(anchorX+3, ly); ctx.lineTo(anchorX+14, ly); ctx.stroke();
     ctx.setLineDash([]);
-    // 价格标签
     ctx.fillStyle = c.color;
     ctx.font = isSelected ? '10px monospace' : '9px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(lastV.toFixed(1), pad.left + iw * ANCHOR + 18, ly + 3);
+    ctx.fillText(lastV.toFixed(1), anchorX+16, ly+3);
     ctx.globalAlpha = 1;
   });
 
-  // hover 竖线
   if (radarHoverX !== null && radarHoverX > pad.left && radarHoverX < pad.left + iw * ANCHOR) {
     ctx.strokeStyle = 'rgba(128,128,128,0.2)'; ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
@@ -8303,16 +8294,23 @@ function initKpiSparklines() {
 
 // ── 动画循环：丝滑滚动，时间轴持续流动 ──
 let radarScrollOffset = 0;
-const RADAR_PX_PER_FRAME = 0.6; // 每帧滚动像素，控制流动速度
+let radarLastFrameTime = null;
+const RADAR_PX_PER_SEC = 36; // 每秒滚动像素（控制流速）
 const RADAR_PT_INTERVAL = 10000; // 真实价格更新间隔（10秒）
 let radarLastPtTime = Date.now();
+// 平滑价格标签 Y 坐标（防抖动）
+const radarLabelY = {}; // key -> smoothed Y
 
-function radarAnimLoop() {
+function radarAnimLoop(timestamp) {
   radarTick++;
   const now = Date.now();
 
-  // 每帧持续滚动，不管价格有没有变
-  radarScrollOffset += RADAR_PX_PER_FRAME;
+  // 基于真实时间计算偏移，不依赖帧率
+  if (radarLastFrameTime !== null) {
+    const dt = (timestamp - radarLastFrameTime) / 1000; // 秒
+    radarScrollOffset += RADAR_PX_PER_SEC * dt;
+  }
+  radarLastFrameTime = timestamp;
 
   // 每10秒追加一个真实价格点
   if (now - radarLastPtTime > RADAR_PT_INTERVAL) {
@@ -8323,8 +8321,7 @@ function radarAnimLoop() {
       c.pts.push(Math.max(0.5, last + delta));
       if (c.pts.length > 200) c.pts.shift();
     });
-    // 新点加入后偏移归零，坐标系重置
-    radarScrollOffset = 0;
+    radarScrollOffset = 0; // 新点加入，坐标系重置
   }
 
   drawRadarChart();
@@ -8333,6 +8330,8 @@ function radarAnimLoop() {
 
 async function initRadarPage() {
   if (radarAnimFrame) cancelAnimationFrame(radarAnimFrame);
+  radarScrollOffset = 0;
+  radarLastFrameTime = null;
   // 先显示加载提示
   const canvas = document.getElementById('radarLineChart');
   if (canvas) {
