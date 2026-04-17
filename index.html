@@ -5448,86 +5448,48 @@ function timeAgo(isoTime) {
 
 async function fetchFourMemeTokens() {
   try {
-    const res = await fetch('https://streaming.bitquery.io/eap', {
+    // 使用 four.meme 官方 API 拉取最新代币
+    const res = await fetch('https://four.meme/meme-api/v1/public/token/search', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${BITQUERY_KEY}`
-      },
-      body: JSON.stringify({
-        query: `{
-          EVM(network: bsc) {
-            DEXTrades(
-              limit: {count: 60}
-              orderBy: {descending: Block_Time}
-              where: {
-                Trade: {
-                  Dex: { SmartContract: {is: "${FOURMEME_CONTRACT}"} }
-                  Sell: { Currency: { Symbol: {is: "BNB"} } }
-                }
-              }
-            ) {
-              Block { Time }
-              Trade {
-                Buy {
-                  Currency { Name Symbol SmartContract }
-                  Amount
-                }
-                Sell { Amount }
-              }
-            }
-          }
-        }`
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndex: 1, pageSize: 12, type: 'NEW', listType: 'ADV' })
     });
     const data = await res.json();
-    const trades = data?.data?.EVM?.DEXTrades || [];
-
-    // 去重 + 聚合每个币的总交易量和最新时间
-    const tokenMap = {};
-    for (const t of trades) {
-      const addr = t.Trade.Buy.Currency.SmartContract;
-      if (!addr || addr === '0x') continue;
-      if (!tokenMap[addr]) {
-        tokenMap[addr] = {
-          name: t.Trade.Buy.Currency.Name,
-          symbol: t.Trade.Buy.Currency.Symbol,
-          contract: addr,
-          time: t.Block.Time,
-          bnbVolume: 0,
-          txCount: 0,
-        };
-      }
-      tokenMap[addr].bnbVolume += parseFloat(t.Trade.Sell.Amount || 0);
-      tokenMap[addr].txCount++;
-    }
-
-    // 按交易量排序，取前 6
-    const tokens = Object.values(tokenMap)
-      .sort((a, b) => b.bnbVolume - a.bnbVolume)
-      .slice(0, 6);
-
+    const tokens = (data?.data || []).slice(0, 6);
     if (!tokens.length) return;
 
     // 转换成 courtData 格式并注入候审队列
-    courtData.pending = tokens.map((t, i) => ({
-      id: `FM-${t.contract.slice(2,8).toUpperCase()}`,
-      icon: guessIcon(t.name, t.symbol),
-      name: t.symbol || t.name?.slice(0, 10) || '???',
-      source: `four.meme · ${timeAgo(t.time)}`,
-      tier: 'fast', tierLabel: '快审', tierCls: 'cc-tier-fast',
-      timer: '候审中', urgent: false,
-      betUp: 0, betDown: 0,
-      pool: Math.floor(t.bnbVolume * 320 * 0.3), // BNB → $GAVEL 估算奖池
-      participants: 0,
-      liq: `${(t.bnbVolume).toFixed(2)} BNB`,
-      holders: `${t.txCount * 3}`, // 估算
-      change: '+—%', changeUp: true,
-      whale: t.txCount >= 5 ? '🐳买入' : '—',
-      initiator: 'four.meme 自动',
-      contract: t.contract,
-      bnbVolume: t.bnbVolume,
-    }));
+    courtData.pending = tokens.map(t => {
+      const imgUrl = t.img ? `https://static.four.meme${t.img}` : null;
+      const change24 = t.day1Increase ? (parseFloat(t.day1Increase) * 100).toFixed(1) : '—';
+      const changeUp = parseFloat(t.day1Increase || 0) >= 0;
+      const vol = parseFloat(t.day1Vol || 0);
+      const volStr = vol >= 1000 ? `$${(vol/1000).toFixed(1)}K` : `$${vol.toFixed(0)}`;
+      const launchTime = t.createDate ? new Date(parseInt(t.createDate)) : new Date();
+      return {
+        id: `FM-${t.tokenAddress.slice(2,8).toUpperCase()}`,
+        icon: guessIcon(t.name, t.shortName),
+        iconImg: imgUrl,
+        name: t.shortName || t.name?.slice(0, 12) || '???',
+        fullName: t.name,
+        source: `four.meme · ${timeAgo(launchTime.toISOString())}`,
+        tier: 'fast', tierLabel: '快审', tierCls: 'cc-tier-fast',
+        timer: '候审中', urgent: false,
+        betUp: 0, betDown: 0,
+        pool: Math.floor(vol * 0.01),
+        participants: 0,
+        liq: volStr,
+        holders: t.hold ? `${t.hold}` : '—',
+        change: change24 !== '—' ? `${changeUp?'+':''}${change24}%` : '+—%',
+        changeUp,
+        whale: parseFloat(t.day1Increase || 0) > 0.5 ? '🐳买入' : '—',
+        initiator: t.aiCreator ? '🤖 AI 创建' : 'four.meme 自动',
+        contract: t.tokenAddress,
+        progress: t.progress ? (parseFloat(t.progress) * 100).toFixed(1) : '—',
+        cap: t.cap ? `$${parseFloat(t.cap).toFixed(2)}` : '—',
+        aiCreator: t.aiCreator,
+      };
+    });
 
     // 如果当前在候审 tab，刷新渲染
     if (currentCourtTab === 'pending') renderCourtCards();
@@ -5539,19 +5501,76 @@ async function fetchFourMemeTokens() {
       if (countEl) countEl.textContent = courtData.pending.length;
     }
 
-    // 同步更新 Meme 雷达行情表（用已含 icon 的 courtData.pending）
-    fetchFourMemeTableData(courtData.pending);
+    // 同步更新 Meme 雷达行情表
+    fetchFourMemeTableDataV2(tokens);
 
-    console.log(`✅ four.meme 自动候审：已加载 ${tokens.length} 个币种`);
-    // 同步刷新移动端候审列表
+    // 同步刷新移动端
     if (typeof mRenderCourtList === 'function' && window.innerWidth <= 768) {
       mRenderCourtList();
     }
+
+    console.log(`✅ four.meme 官方 API：已加载 ${tokens.length} 个币种`);
   } catch(e) {
     console.warn('four.meme 数据拉取失败，使用 mock 数据', e);
   }
 }
 
+// four.meme 官方 API 行情表数据（直接用官方数据，不再依赖 DexScreener）
+async function fetchFourMemeTableDataV2(tokens) {
+  if (!tokens || !tokens.length) return;
+  try {
+    // 热度榜
+    const hotRes = await fetch('https://four.meme/meme-api/v1/public/token/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndex: 1, pageSize: 8, type: 'HOT', listType: 'ADV' })
+    });
+    const hotData = await hotRes.json();
+    const hotTokens = hotData?.data || [];
+
+    // 涨幅榜（用 INCREASE type）
+    const gainRes = await fetch('https://four.meme/meme-api/v1/public/token/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndex: 1, pageSize: 8, type: 'INCREASE', listType: 'ADV' })
+    });
+    const gainData = await gainRes.json();
+    const gainTokens = gainData?.data || hotTokens.slice().sort((a,b) => parseFloat(b.day1Increase||0) - parseFloat(a.day1Increase||0));
+
+    function toTableRow(t, i) {
+      const change24 = t.day1Increase ? (parseFloat(t.day1Increase) * 100).toFixed(1) : '0';
+      const changeUp = parseFloat(t.day1Increase || 0) >= 0;
+      const vol = parseFloat(t.day1Vol || 0);
+      const imgUrl = t.img ? `https://static.four.meme${t.img}` : null;
+      return {
+        rank: i + 1,
+        icon: guessIcon(t.name, t.shortName),
+        iconImg: imgUrl,
+        name: t.shortName || t.name?.slice(0,12) || '???',
+        source: 'four.meme',
+        price: t.price ? `$${parseFloat(t.price).toPrecision(4)}` : '—',
+        change: `${changeUp?'+':''}${change24}%`,
+        up: changeUp,
+        vol: vol >= 1000 ? `$${(vol/1000).toFixed(0)}K` : `$${vol.toFixed(0)}`,
+        liq: t.cap ? `$${parseFloat(t.cap).toFixed(2)}` : '—',
+        holders: t.hold ? `${t.hold}笔` : '—',
+        hot: parseFloat(t.day1Increase||0) > 0.5,
+        isNew: true,
+        contract: t.tokenAddress,
+        progress: t.progress ? (parseFloat(t.progress)*100).toFixed(1) + '%' : '—',
+      };
+    }
+
+    bscTableData.fourmeme.hot = hotTokens.map(toTableRow);
+    bscTableData.fourmeme.gain = gainTokens.map(toTableRow);
+    bscTableData.fourmeme.new = tokens.map(toTableRow); // 新币用 fetchFourMemeTokens 拿到的 NEW 列表
+
+    if (currentTbFilter === 'fourmeme') renderBscTable();
+    console.log(`✅ four.meme 行情表：热度榜${hotTokens.length}条，涨幅榜${gainTokens.length}条`);
+  } catch(e) {
+    console.warn('four.meme 行情表更新失败', e);
+  }
+}
 
 
 const courtData = {
@@ -5733,7 +5752,7 @@ function renderCourtCards() {
       <div class="cc-top">
         <div class="cc-header">
           <div class="cc-coin">
-            <div class="cc-icon">${c.icon}</div>
+            <div class="cc-icon">${c.iconImg ? `<img src="${c.iconImg}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentElement.textContent='${c.icon}'">` : c.icon}</div>
             <div>
               <div class="cc-name">${c.name}</div>
               <div class="cc-source">${c.source}</div>
@@ -6914,7 +6933,7 @@ function renderBscTableMock() {
   el.innerHTML = data.map(r => `
     <div class="bsc-table-row">
       <div class="bsc-tr-rank ${r.rank<=3?'r'+r.rank:''}">${r.rank}</div>
-      <div class="bsc-tr-icon">${r.icon}</div>
+      <div class="bsc-tr-icon">${r.iconImg ? `<img src="${r.iconImg}" style="width:24px;height:24px;border-radius:6px;object-fit:cover" onerror="this.parentElement.textContent='${r.icon}'">` : r.icon}</div>
       <div class="bsc-tr-name-cell">
         <div class="bsc-tr-name">${r.name} ${r.hot?'<span class="bsc-tr-hot">🔥HOT</span>':''} ${r.isNew?'<span class="bsc-tr-new">NEW</span>':''}</div>
         <div class="bsc-tr-source">${r.source}</div>
@@ -7402,7 +7421,7 @@ function buildSlideHTML(d) {
         <!-- 左：裁定 -->
         <div>
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-            <div style="font-size:32px;width:52px;height:52px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${d.icon}</div>
+            <div style="font-size:32px;width:52px;height:52px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">${d.iconImg ? `<img src="${d.iconImg}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${d.icon}'">` : d.icon}</div>
             <div>
               <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.03em">${d.pair}</div>
               <div style="font-size:11px;color:rgba(255,255,255,0.35);font-family:var(--mono);margin-top:2px">${d.source}</div>
@@ -7498,7 +7517,7 @@ function resetFeaturedTimer() {
 // 每日 DeepSeek 生成 + localStorage 缓存
 async function loadFeaturedData() {
   const today = new Date().toLocaleDateString('zh-CN');
-  const cacheKey = 'memecourt_featured_' + today;
+  const cacheKey = 'memecourt_featured_v2_' + today;
 
   // 先用 fallback 渲染，避免白屏
   initFeaturedCarousel(FEATURED_FALLBACK);
@@ -7508,54 +7527,87 @@ async function loadFeaturedData() {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (parsed?.length >= 3) {
-        initFeaturedCarousel(parsed);
-        return;
-      }
+      if (parsed?.length >= 3) { initFeaturedCarousel(parsed); return; }
     }
   } catch(e) {}
 
-  // 后台调用 DeepSeek 生成今日精选
+  try {
+    // 用 four.meme 官方 API 拿热门币
+    const res = await fetch('https://four.meme/meme-api/v1/public/token/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndex: 1, pageSize: 5, type: 'HOT', listType: 'ADV' })
+    });
+    const data = await res.json();
+    const hotTokens = (data?.data || []).slice(0, 5);
+
+    if (!hotTokens.length) { loadFeaturedDataFallback(); return; }
+
+    const sys = `你是 Meme 法庭的 AI 法官「链上包公」，风格幽默毒舌、数据扎实。
+严格按以下 JSON 格式输出一个对象，不输出任何其他内容，不加 markdown 代码块：
+{"verdict":"BULLISH或BEARISH或NEUTRAL","confidence":数字0到100,"risk":"低风险或中风险或高风险或极高风险","short":"4句精简裁定，用\\n分隔，最后一句是扎心总结","full":"2段完整分析，段间用\\n\\n分隔"}`;
+
+    const results = [];
+    for (const t of hotTokens) {
+      try {
+        const change24 = t.day1Increase ? (parseFloat(t.day1Increase)*100).toFixed(1) : '0';
+        const imgUrl = t.img ? `https://static.four.meme${t.img}` : null;
+        const prompt = `请对 four.meme 上的热门 Meme 币「${t.shortName || t.name}」进行今日裁定。
+链上数据：24h 涨跌幅 ${change24}%，24h 交易量 $${t.day1Vol || '—'}，持仓地址 ${t.hold || '—'}，Bonding curve 进度 ${t.progress ? (parseFloat(t.progress)*100).toFixed(1) : '—'}%，市值 $${t.cap || '—'}。
+给出你的裁定。`;
+        const raw = await callGemini(sys, prompt);
+        const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+        results.push({
+          coin: t.shortName || t.name,
+          icon: guessIcon(t.name, t.shortName),
+          iconImg: imgUrl,
+          pair: `${t.shortName || t.name} / BNB`,
+          source: 'four.meme · 今日更新',
+          verdict: parsed.verdict,
+          confidence: parsed.confidence,
+          risk: parsed.risk,
+          short: parsed.short,
+          full: parsed.full,
+          caseId: `FM-${t.tokenAddress?.slice(2,8).toUpperCase() || '000000'}`,
+          metrics: [
+            { label: '流动性', value: `$${t.cap || '—'}`, src: 'four.meme' },
+            { label: '24h 涨跌', value: `${parseFloat(t.day1Increase||0)>=0?'+':''}${change24}%`, src: 'four.meme' },
+            { label: '持仓地址', value: `${t.hold || '—'}`, src: 'four.meme' },
+            { label: 'Bonding进度', value: `${t.progress?(parseFloat(t.progress)*100).toFixed(1):'—'}%`, src: 'four.meme' },
+          ],
+        });
+      } catch(e) {
+        const fb = FEATURED_FALLBACK[results.length % FEATURED_FALLBACK.length];
+        if (fb) results.push(fb);
+      }
+    }
+
+    if (results.length >= 3) {
+      try { localStorage.setItem(cacheKey, JSON.stringify(results)); } catch(e) {}
+      initFeaturedCarousel(results);
+    }
+  } catch(e) {
+    console.warn('精选轮播加载失败，用 fallback', e);
+    loadFeaturedDataFallback();
+  }
+}
+
+async function loadFeaturedDataFallback() {
   const coins = [
     {coin:'PEPE', icon:'🐸', pair:'PEPE / BNB'},
     {coin:'DOGE', icon:'🐶', pair:'DOGE / BNB'},
     {coin:'WIF',  icon:'🎩', pair:'WIF / BNB'},
-    {coin:'BONK', icon:'🔨', pair:'BONK / BNB'},
-    {coin:'TURBO',icon:'⚡', pair:'TURBO / BNB'},
   ];
-
-  const sys = `你是 Meme 法庭的 AI 法官「链上包公」，风格幽默毒舌、数据扎实。
-严格按以下 JSON 格式输出一个对象，不输出任何其他内容，不加 markdown 代码块：
-{"verdict":"BULLISH或BEARISH或NEUTRAL","confidence":数字0到100,"risk":"低风险或中风险或高风险或极高风险","short":"4句精简裁定，用\\n分隔，最后一句是扎心总结","full":"2段完整分析，段间用\\n\\n分隔"}`;
-
+  const sys = `你是 Meme 法庭的 AI 法官「链上包公」，风格幽默毒舌。严格按 JSON 输出：{"verdict":"BULLISH或BEARISH或NEUTRAL","confidence":数字,"risk":"低风险或中风险或高风险","short":"4句\\n分隔最后一句扎心","full":"2段\\n\\n分隔"}`;
   const results = [];
   for (const c of coins) {
     try {
-      const prompt = `请对 BNB Chain 上的 ${c.coin} Meme 币进行今日裁定分析，结合典型的链上数据特征（流动性、涨跌幅、持仓地址、巨鲸动向），给出你的裁定。`;
-      const raw = await callGemini(sys, prompt);
+      const raw = await callGemini(sys, `对 ${c.coin} 进行今日裁定分析`);
       const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
-      results.push({
-        ...c,
-        source: 'four.meme · 今日更新',
-        verdict: parsed.verdict,
-        confidence: parsed.confidence,
-        risk: parsed.risk,
-        short: parsed.short,
-        full: parsed.full,
-        metrics: FEATURED_FALLBACK.find(f => f.coin === c.coin)?.metrics || [],
-        caseId: 'court-00' + (results.length + 1),
-      });
-    } catch(e) {
-      // 单条失败用 fallback
-      const fb = FEATURED_FALLBACK.find(f => f.coin === c.coin);
-      if (fb) results.push(fb);
-    }
+      results.push({ ...c, source:'four.meme · 今日更新', ...parsed, metrics:FEATURED_FALLBACK.find(f=>f.coin===c.coin)?.metrics||[], caseId:'court-00'+(results.length+1) });
+    } catch(e) { const fb=FEATURED_FALLBACK.find(f=>f.coin===c.coin); if(fb) results.push(fb); }
   }
-
-  if (results.length >= 3) {
-    try { localStorage.setItem(cacheKey, JSON.stringify(results)); } catch(e) {}
-    initFeaturedCarousel(results);
-  }
+  if (results.length >= 3) { try { localStorage.setItem('memecourt_featured_v2_'+new Date().toLocaleDateString('zh-CN'), JSON.stringify(results)); } catch(e) {} initFeaturedCarousel(results); }
 }
 
 /* ── INIT ── */
@@ -8354,7 +8406,7 @@ function mRenderCourtList() {
     const onclick = isClosed ? `mOpenDetail('${c.id}')` : `mOpenDetail('${c.id}')`;
 
     return `<div class="m-court-item" onclick="${onclick}">
-      <div class="m-court-icon">${c.icon}</div>
+      <div class="m-court-icon">${c.iconImg ? `<img src="${c.iconImg}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentElement.textContent='${c.icon}'">` : c.icon}</div>
       <div class="m-court-info">
         <div class="m-court-name">
           ${isLive ? `<span class="m-court-live-dot"></span>` : ''}${c.name}
