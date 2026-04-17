@@ -2228,6 +2228,21 @@ textarea::placeholder{color:var(--text3)}
         </div>
       </div>
       <div class="bp-body">
+        <!-- AI 赔率 -->
+        <div id="bpAiOdds" style="display:none;margin-bottom:10px;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px">
+          <div style="font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:.06em;margin-bottom:6px">⚖️ AI 加权赔率</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="text-align:center">
+              <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px">看涨赔率</div>
+              <div id="bpUpMultiplier" style="font-size:18px;font-weight:800;color:#4ade80;font-family:var(--mono)">1.5x</div>
+            </div>
+            <div id="bpAiVerdictBadge" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6)">AI 中立</div>
+            <div style="text-align:center">
+              <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px">看跌赔率</div>
+              <div id="bpDownMultiplier" style="font-size:18px;font-weight:800;color:#f87171;font-family:var(--mono)">1.5x</div>
+            </div>
+          </div>
+        </div>
         <div class="bp-dirs">
           <div class="bp-dir up" id="bpDirUp" onclick="selectDetailDir('up')">
             <div class="bp-dir-icon">📈</div>
@@ -2264,7 +2279,7 @@ textarea::placeholder{color:var(--text3)}
         </div>
         <button class="bp-submit" id="bpSubmitBtn" onclick="submitDetailBet()" disabled>选择方向后押注</button>
       </div>
-      <div class="bp-footer">押注后可发弹幕 · 按档位验证结算 · 不构成投资建议</div>
+      <div class="bp-footer">单次押注上限 5,000 $GAVEL · 按档位验证结算</div><div style="font-size:10px;color:rgba(255,255,255,0.2);text-align:center;padding:6px 16px 4px;line-height:1.5">本平台仅供娱乐，AI 裁定不构成投资建议。参与押注即表示你已了解并接受相关风险。</div>
     </div>
 
   </div>
@@ -5761,6 +5776,7 @@ function renderCourtCards() {
           <div class="cc-status-wrap">
             ${statusBadge}
             <span class="cc-tier-badge ${c.tierCls}">${c.tierLabel}</span>
+            ${c.aiVerdict?.risk === '高风险' || c.aiVerdict?.risk === '极高风险' ? `<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca">⚠️ ${c.aiVerdict.risk}</span>` : ''}
             <span class="cc-timer ${c.urgent?'urgent':''}">${c.timer}</span>
           </div>
         </div>
@@ -5824,6 +5840,13 @@ function openCourtDetail(id) {
   detailDanmakuDir = null;
   danmakuUpCount = 0;
   danmakuDownCount = 0;
+  _highRiskVerdict = null;
+  _riskConfirmed = false;
+  // 清除旧的赔率和风险警告
+  const bpAiOdds = document.getElementById('bpAiOdds');
+  if (bpAiOdds) bpAiOdds.style.display = 'none';
+  const bpRiskWarn = document.getElementById('bpRiskWarning');
+  if (bpRiskWarn) bpRiskWarn.remove();
 
   const isLive = courtData.live.includes(c);
   const isPending = courtData.pending.includes(c);
@@ -6023,13 +6046,91 @@ async function requestAIVerdict(c) {
     // 缓存裁定结果到案件数据（避免重复请求）
     c.aiVerdict = parsed;
 
+    // ── AI 裁定影响押注赔率 ──
+    updateBpOdds(parsed);
+
+    // ── 高风险标记 ──
+    if (parsed.risk === '高风险' || parsed.risk === '极高风险') {
+      markHighRisk(parsed.risk, parsed.short);
+    }
+
   } catch(e) {
     const dvsBody = document.getElementById('dvsBody');
     if (dvsBody) dvsBody.innerHTML = `<div class="dvs-result"><strong>⚖️ 本庭暂时无法审理此案。</strong><br>网络异常，请稍后再试。</div>`;
   }
 }
 
-/* ── 弹幕系统 ── */
+// ── AI 裁定影响赔率 ──
+function updateBpOdds(verdict) {
+  const el = document.getElementById('bpAiOdds');
+  if (!el) return;
+  el.style.display = 'block';
+
+  const v = verdict.verdict;
+  const conf = (verdict.confidence || 50) / 100;
+
+  // 赔率算法：AI 看涨且置信度高 → 看涨方赔率低（竞争激烈），看跌赔率高（冷门）
+  // 基础赔率 2.0x，根据 AI 方向和置信度偏移最多 ±1.2x
+  const shift = conf * 1.2;
+  let upMult, downMult;
+  if (v === 'BULLISH') {
+    upMult = Math.max(1.1, (2.0 - shift)).toFixed(1);
+    downMult = Math.min(5.0, (2.0 + shift)).toFixed(1);
+  } else if (v === 'BEARISH') {
+    upMult = Math.min(5.0, (2.0 + shift)).toFixed(1);
+    downMult = Math.max(1.1, (2.0 - shift)).toFixed(1);
+  } else {
+    upMult = '2.0'; downMult = '2.0';
+  }
+
+  document.getElementById('bpUpMultiplier').textContent = upMult + 'x';
+  document.getElementById('bpDownMultiplier').textContent = downMult + 'x';
+
+  const badge = document.getElementById('bpAiVerdictBadge');
+  if (v === 'BULLISH') {
+    badge.textContent = `📈 AI 看涨 ${verdict.confidence}%`;
+    badge.style.cssText = 'font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(74,222,128,0.12);color:#4ade80;border:1px solid rgba(74,222,128,0.25)';
+  } else if (v === 'BEARISH') {
+    badge.textContent = `📉 AI 看跌 ${verdict.confidence}%`;
+    badge.style.cssText = 'font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.25)';
+  } else {
+    badge.textContent = `⚖️ AI 中立 ${verdict.confidence}%`;
+    badge.style.cssText = 'font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25)';
+  }
+
+  // 同步存到案件数据，押注时用
+  if (currentDetailCase) {
+    currentDetailCase._upMult = parseFloat(upMult);
+    currentDetailCase._downMult = parseFloat(downMult);
+  }
+}
+
+// ── 高风险标记 ──
+let _highRiskVerdict = null;
+function markHighRisk(riskLevel, shortText) {
+  _highRiskVerdict = { riskLevel, shortText };
+  // 在押注面板顶部加红色警告条
+  const existing = document.getElementById('bpRiskWarning');
+  if (existing) existing.remove();
+  const warn = document.createElement('div');
+  warn.id = 'bpRiskWarning';
+  warn.style.cssText = 'margin-bottom:10px;padding:8px 12px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.25);border-radius:10px';
+  warn.innerHTML = `<div style="font-size:11px;font-weight:700;color:#f87171;margin-bottom:3px">⚠️ AI 法官标记：${riskLevel}</div><div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5">${(shortText||'').split('\n').pop()}</div>`;
+  const bpBody = document.querySelector('.bp-body');
+  if (bpBody) bpBody.insertBefore(warn, bpBody.firstChild);
+}
+
+// ── 押注前高风险确认拦截（注入到 submitDetailBet 前） ──
+let _riskConfirmed = false;
+function checkRiskBeforeBet() {
+  if (!_highRiskVerdict || _riskConfirmed) return true;
+  // 弹确认框
+  const ok = confirm(`⚠️ 高风险警告\n\nAI 法官将此案件标记为「${_highRiskVerdict.riskLevel}」\n\n${(_highRiskVerdict.shortText||'').split('\n').pop()}\n\n押注即表示你已了解并接受相关风险。确认继续？`);
+  if (ok) _riskConfirmed = true;
+  return ok;
+}
+
+
 let danmakuTimer = null;
 let danmakuUpCount = 0;
 let danmakuDownCount = 0;
@@ -6145,9 +6246,13 @@ async function submitDetailBet() {
   if (!walletConnected) { showToast('请先连接钱包'); return; }
   const amt = parseInt(document.getElementById('bpAmountInput').value) || 0;
   if (!amt || amt < 10) { showToast('最少押注 10 $GAVEL'); return; }
+  if (amt > 5000) { showToast('单次押注上限 5,000 $GAVEL'); return; }
   if (amt > gavelBalance) { showToast('余额不足'); return; }
   if (!detailBetDir) { showToast('请选择押注方向'); return; }
   if (!currentDetailCase) return;
+
+  // 高风险确认拦截
+  if (!checkRiskBeforeBet()) return;
 
   const btn = document.getElementById('bpSubmitBtn');
   btn.textContent = '⏳ 等待授权…'; btn.disabled = true;
