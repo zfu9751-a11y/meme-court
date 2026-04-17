@@ -1772,8 +1772,9 @@ textarea::placeholder{color:var(--text3)}
         <div class="bsc-bubble-card" style="overflow:visible">
           <!-- 顶部选币栏 -->
           <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative" id="chartHeader">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0" id="coinPillsRow"></div>
-            <button id="addCoinBtn" onclick="toggleCoinDropdown()" style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;border:1px dashed var(--border2);font-size:11px;cursor:pointer;background:transparent;color:var(--text3);white-space:nowrap;font-family:var(--sans)">+ 添加币种</button>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0" id="coinPillsRow">
+              <button id="addCoinBtn" onclick="toggleCoinDropdown()" style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;border:1px dashed var(--border2);font-size:11px;cursor:pointer;background:transparent;color:var(--text3);white-space:nowrap;font-family:var(--sans)">+ 添加币种</button>
+            </div>
             <select style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text2);font-family:var(--sans)" onchange="switchTimeRange(this.value)">
               <option value="1h">1小时</option>
               <option value="4h">4小时</option>
@@ -7821,8 +7822,8 @@ function genRadarPoints(seed, n, base, vol) {
 function renderCoinPills() {
   const row = document.getElementById('coinPillsRow');
   if (!row) return;
-  const addBtn = document.getElementById('addCoinBtn');
   row.querySelectorAll('.radar-pill').forEach(p => p.remove());
+  const addBtn = row.querySelector('#addCoinBtn') || document.getElementById('addCoinBtn');
   Object.values(COIN_POOL).forEach(c => {
     const pill = document.createElement('div');
     pill.className = 'radar-pill';
@@ -7831,7 +7832,11 @@ function renderCoinPills() {
     pill.style.cssText = `display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:99px;border:${isActive?'1.5':'0.5'}px solid ${isActive?c.color:'var(--border2)'};font-size:11px;cursor:pointer;background:var(--white);color:${isActive?c.color:'var(--text3)'};transition:all .15s;white-space:nowrap`;
     pill.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:${c.color};flex-shrink:0;display:inline-block"></span>${c.name}<span onclick="removeRadarCoin('${c.key}',event)" style="width:13px;height:13px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--border);font-size:9px;color:var(--text3);margin-left:2px;cursor:pointer">×</span>`;
     pill.addEventListener('click', () => selectRadarCoin(c.key));
-    row.insertBefore(pill, addBtn);
+    if (addBtn && addBtn.parentNode === row) {
+      row.insertBefore(pill, addBtn);
+    } else {
+      row.appendChild(pill);
+    }
   });
   updateCoinSelectHint();
 }
