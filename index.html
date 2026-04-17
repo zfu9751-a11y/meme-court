@@ -7737,18 +7737,78 @@ async function loadFeaturedDataFallback() {
   if (results.length >= 3) { try { localStorage.setItem('memecourt_featured_v2_'+new Date().toLocaleDateString('zh-CN'), JSON.stringify(results)); } catch(e) {} initFeaturedCarousel(results); }
 }
 
-/* ══ Meme 雷达折线图系统 — lightweight-charts 版 ══ */
+/* ══ Meme 雷达折线图系统 ══ */
 
 const COIN_COLORS = ['#e8571a','#639922','#378add','#7f77dd','#ba7517'];
-const COIN_POOL = {};
-let radarSelected = null;
-let radarChart = null;      // lightweight-charts 实例
-let radarSeries = {};       // key -> series 对象
+const COIN_POOL = {}; // 币种数据池：key=address, {name,color,pts,annotations,aiData}
+let radarSelected = null; // 当前选中的币种 key
+let radarAnimFrame = null;
 let radarTick = 0;
-let radarUpdateTimer = null;
-const radarLabelY = {};
+let radarTimeRange = '1h';
+let radarHoverX = null;
 
-// 生成初始历史点
+// 初始化默认币种：直接调 four.meme 热度榜
+async function initRadarCoins() {
+  try {
+    const res = await fetch('https://four.meme/meme-api/v1/public/token/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndex: 1, pageSize: 5, type: 'HOT', listType: 'ADV' })
+    });
+    const data = await res.json();
+    const hotTokens = (data?.data || []).slice(0, 5);
+
+    if (hotTokens.length) {
+      hotTokens.forEach((t, i) => {
+        const key = t.tokenAddress;
+        if (!COIN_POOL[key]) {
+          const change24 = t.day1Increase ? (parseFloat(t.day1Increase)*100).toFixed(1) : '0';
+          const changeUp = parseFloat(t.day1Increase||0) >= 0;
+          COIN_POOL[key] = {
+            key, name: t.shortName || t.name?.slice(0,12) || '???',
+            icon: guessIcon(t.name, t.shortName),
+            iconImg: t.img ? `https://static.four.meme${t.img}` : null,
+            color: COIN_COLORS[i % COIN_COLORS.length],
+            contract: t.tokenAddress,
+            pts: genRadarPoints(i * 1.3, 90, 100, 8),
+            annotations: [], aiData: null,
+            change: `${changeUp?'+':''}${change24}%`,
+            changeUp,
+            liq: t.cap ? `$${parseFloat(t.cap).toFixed(2)}` : '—',
+            holders: t.hold ? `${t.hold}` : '—',
+            progress: t.progress ? (parseFloat(t.progress)*100).toFixed(1)+'%' : '—',
+          };
+        }
+      });
+    }
+  } catch(e) {
+    // 降级用 courtData.pending
+    const sources = courtData.pending.slice(0, 5);
+    sources.forEach((c, i) => {
+      const key = c.contract || c.id;
+      if (!COIN_POOL[key]) {
+        COIN_POOL[key] = {
+          key, name: c.name, icon: c.icon, iconImg: c.iconImg || null,
+          color: COIN_COLORS[i % COIN_COLORS.length],
+          contract: c.contract,
+          pts: genRadarPoints(i * 1.3, 90, 100, 8),
+          annotations: [], aiData: null,
+          change: c.change, changeUp: c.changeUp,
+          liq: c.liq, holders: c.holders,
+        };
+      }
+    });
+  }
+
+  renderCoinPills();
+  if (!radarSelected && Object.keys(COIN_POOL).length > 0) {
+    radarSelected = Object.keys(COIN_POOL)[0];
+    // 自动触发第一个币的 AI 分析
+    setTimeout(() => triggerAISidePanel(radarSelected), 500);
+  }
+  renderCoinDropdownList();
+}
+
 function genRadarPoints(seed, n, base, vol) {
   const pts = [];
   let v = base;
@@ -7759,199 +7819,12 @@ function genRadarPoints(seed, n, base, vol) {
   return pts;
 }
 
-// 把历史点转成 lightweight-charts 需要的格式 {time, value}
-function ptsToLWData(pts) {
-  const now = Math.floor(Date.now() / 1000);
-  const intervalSec = 10; // 每个点间隔10秒
-  return pts.map((v, i) => ({
-    time: now - (pts.length - 1 - i) * intervalSec,
-    value: v,
-  }));
-}
-
-// 初始化 lightweight-charts 实例
-function initLWChart() {
-  const container = document.getElementById('radarLineChart');
-  if (!container) return;
-  container.innerHTML = '';
-
-  // 检测颜色模式
-  const isDark = document.documentElement.classList.contains('dark') ||
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-  radarChart = LightweightCharts.createChart(container, {
-    width: container.offsetWidth,
-    height: 300,
-    layout: {
-      background: { type: 'solid', color: 'transparent' },
-      textColor: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)',
-      fontSize: 10,
-      fontFamily: 'monospace',
-    },
-    grid: {
-      vertLines: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', style: 1 },
-      horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', style: 1 },
-    },
-    crosshair: {
-      mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: { color: 'rgba(128,128,128,0.3)', width: 1, style: 3, labelVisible: false },
-      horzLine: { color: 'rgba(128,128,128,0.3)', width: 1, style: 3, labelVisible: false },
-    },
-    rightPriceScale: {
-      borderVisible: false,
-      scaleMargins: { top: 0.1, bottom: 0.1 },
-      textColor: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)',
-    },
-    timeScale: {
-      borderVisible: false,
-      timeVisible: true,
-      secondsVisible: true,
-      rightOffset: 12, // 右侧留白
-      tickMarkFormatter: (time) => {
-        const d = new Date(time * 1000);
-        const diff = Math.floor((Date.now()/1000) - time);
-        if (diff < 60) return `${diff}s前`;
-        if (diff < 3600) return `${Math.floor(diff/60)}m前`;
-        return `${Math.floor(diff/3600)}h前`;
-      },
-    },
-    handleScroll: true,
-    handleScale: true,
-  });
-
-  // 监听 crosshair，点击曲线触发 AI 分析
-  radarChart.subscribeCrosshairMove(param => {
-    if (!param.point || !param.seriesData) return;
-    let closestKey = null, minDist = Infinity;
-    Object.keys(radarSeries).forEach(key => {
-      const s = radarSeries[key];
-      const data = param.seriesData.get(s);
-      if (!data) return;
-      const price = data.value;
-      const screenY = radarChart.priceToCoordinate ? param.point.y : 0;
-      const dist = Math.abs(param.point.y - (radarChart.timeScale().timeToCoordinate ? 0 : 0));
-      if (dist < minDist) { minDist = dist; closestKey = key; }
-    });
-  });
-
-  // 点击选中
-  container.addEventListener('click', () => {
-    // 找距离 crosshair 最近的曲线
-    const coins = Object.keys(radarSeries);
-    if (coins.length === 0) return;
-    // 默认切换到下一个
-    const idx = coins.indexOf(radarSelected);
-    const next = coins[(idx + 1) % coins.length];
-    selectRadarCoin(next);
-  });
-
-  // 响应式 resize
-  const ro = new ResizeObserver(() => {
-    if (radarChart && container.offsetWidth > 0) {
-      radarChart.applyOptions({ width: container.offsetWidth });
-    }
-  });
-  ro.observe(container);
-}
-
-// 添加或更新一条系列
-function addOrUpdateSeries(key) {
-  const c = COIN_POOL[key];
-  if (!c || !radarChart) return;
-  const isSelected = key === radarSelected;
-
-  if (!radarSeries[key]) {
-    radarSeries[key] = radarChart.addAreaSeries({
-      lineColor: c.color,
-      topColor: isSelected ? c.color + '18' : 'transparent',
-      bottomColor: 'transparent',
-      lineWidth: isSelected ? 2 : 1,
-      lineStyle: 0,
-      priceLineVisible: isSelected,
-      priceLineColor: c.color,
-      priceLineWidth: 1,
-      priceLineStyle: 3,
-      lastValueVisible: isSelected,
-      crosshairMarkerVisible: isSelected,
-      crosshairMarkerRadius: 4,
-    });
-    radarSeries[key].setData(ptsToLWData(c.pts));
-  }
-
-  // 更新样式（选中/未选中）
-  radarSeries[key].applyOptions({
-    lineColor: isSelected ? c.color : c.color + '28',
-    topColor: isSelected ? c.color + '14' : 'transparent',
-    lineWidth: isSelected ? 2 : 1,
-    priceLineVisible: isSelected,
-    lastValueVisible: isSelected,
-    crosshairMarkerVisible: isSelected,
-  });
-}
-
-function removeSeries(key) {
-  if (radarSeries[key] && radarChart) {
-    radarChart.removeSeries(radarSeries[key]);
-    delete radarSeries[key];
-  }
-}
-
-// 每10秒追加新数据点
-function startRadarUpdate() {
-  if (radarUpdateTimer) clearInterval(radarUpdateTimer);
-  radarUpdateTimer = setInterval(() => {
-    const now = Math.floor(Date.now() / 1000);
-    Object.keys(COIN_POOL).forEach(key => {
-      const c = COIN_POOL[key];
-      const last = c.pts[c.pts.length - 1];
-      const delta = (Math.random() - 0.49) * 2.5;
-      const newVal = Math.max(0.5, last + delta);
-      c.pts.push(newVal);
-      if (c.pts.length > 500) c.pts.shift();
-      if (radarSeries[key]) {
-        radarSeries[key].update({ time: now, value: newVal });
-      }
-    });
-    // 更新 AI 标注（如果有）
-    if (radarSelected && COIN_POOL[radarSelected]?.annotations?.length) {
-      refreshAnnotations(radarSelected);
-    }
-  }, 10000);
-}
-
-function refreshAnnotations(key) {
-  const c = COIN_POOL[key];
-  const s = radarSeries[key];
-  if (!c || !s) return;
-  const now = Math.floor(Date.now() / 1000);
-  const markers = (c.annotations || []).map(a => {
-    const timeOffset = (c.pts.length - 1 - a.i) * 10;
-    return {
-      time: now - timeOffset,
-      position: a.type === 'warn' ? 'aboveBar' : 'belowBar',
-      color: a.type === 'whale' ? '#dc2626' : a.type === 'warn' ? '#d97706' : '#16a34a',
-      shape: a.type === 'break' ? 'circle' : 'arrowUp',
-      text: a.type === 'whale' ? '🐳' : a.type === 'warn' ? '⚠' : '●',
-      size: 1,
-    };
-  });
-  s.setMarkers(markers);
-}
-
-// 选中币种
-function selectRadarCoin(key) {
-  radarSelected = key;
-  renderCoinPills();
-  Object.keys(radarSeries).forEach(k => addOrUpdateSeries(k));
-  triggerAISidePanel(key);
-}
-
 // 渲染 pill
 function renderCoinPills() {
   const row = document.getElementById('coinPillsRow');
   if (!row) return;
   row.querySelectorAll('.radar-pill').forEach(p => p.remove());
-  const addBtn = row.querySelector('#addCoinBtn');
+  const addBtn = row.querySelector('#addCoinBtn') || document.getElementById('addCoinBtn');
   Object.values(COIN_POOL).forEach(c => {
     const pill = document.createElement('div');
     pill.className = 'radar-pill';
@@ -7972,15 +7845,19 @@ function renderCoinPills() {
 function removeRadarCoin(key, e) {
   e.stopPropagation();
   if (Object.keys(COIN_POOL).length <= 1) return;
-  removeSeries(key);
   delete COIN_POOL[key];
   if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0] || null;
   renderCoinPills();
   renderCoinDropdownList();
-  if (radarSelected) addOrUpdateSeries(radarSelected);
 }
 
-// 下拉选币
+function selectRadarCoin(key) {
+  radarSelected = key;
+  renderCoinPills();
+  triggerAISidePanel(key);
+}
+
+// 下拉列表
 function toggleCoinDropdown() {
   const dd = document.getElementById('coinDropdown');
   if (!dd) return;
@@ -7999,25 +7876,25 @@ function filterCoinList(val) {
 function renderCoinDropdownList() {
   const list = document.getElementById('coinDropdownList');
   if (!list) return;
-  const allCoins = [
+  const allCoinsForDropdown = [
     ...Object.values(COIN_POOL),
-    ...courtData.pending.filter(c => !COIN_POOL[c.contract||c.id]).map((c,i) => ({
-      key: c.contract||c.id, name: c.name, icon: c.icon,
-      contract: c.contract, color: COIN_COLORS[i%COIN_COLORS.length],
+    ...courtData.pending.filter(c => !COIN_POOL[c.contract || c.id]).map((c, i) => ({
+      key: c.contract || c.id, name: c.name, icon: c.icon, iconImg: c.iconImg,
+      contract: c.contract, color: COIN_COLORS[i % COIN_COLORS.length],
       change: c.change, changeUp: c.changeUp,
     }))
   ];
-  list.innerHTML = allCoins.map(c => {
+  list.innerHTML = allCoinsForDropdown.map(c => {
     const inPool = !!COIN_POOL[c.key];
     const changeColor = c.changeUp ? 'var(--green)' : 'var(--red)';
     return `<div class="dd-coin-item" data-key="${c.key}" data-name="${c.name}" onclick="toggleDropdownCoin('${c.key}')"
       style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .1s;background:${inPool?'var(--accent-bg)':''}">
-      <div style="width:26px;height:26px;border-radius:7px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${c.icon||'⚖️'}</div>
+      <div style="width:26px;height:26px;border-radius:7px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${c.icon || '⚖️'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;color:var(--text)">${c.name}</div>
-        <div style="font-size:10px;color:var(--text3)">${c.contract?c.contract.slice(0,10)+'...':'four.meme'}</div>
+        <div style="font-size:10px;color:var(--text3)">${c.contract ? c.contract.slice(0,10)+'...' : 'four.meme'}</div>
       </div>
-      <span style="font-size:11px;font-weight:700;color:${changeColor}">${c.change||'—'}</span>
+      <span style="font-size:11px;font-weight:700;color:${changeColor}">${c.change || '—'}</span>
       <div style="width:16px;height:16px;border-radius:4px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;${inPool?'background:var(--accent);border-color:var(--accent);color:#fff':''}">${inPool?'✓':''}</div>
     </div>`;
   }).join('');
@@ -8027,29 +7904,26 @@ function renderCoinDropdownList() {
 function toggleDropdownCoin(key) {
   if (COIN_POOL[key]) {
     if (Object.keys(COIN_POOL).length <= 1) return;
-    removeSeries(key);
     delete COIN_POOL[key];
-    if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0]||null;
+    if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0] || null;
   } else {
     if (Object.keys(COIN_POOL).length >= 5) { showToast('最多同时显示 5 个币种'); return; }
-    const src = courtData.pending.find(c => (c.contract||c.id) === key);
+    const src = courtData.pending.find(c => (c.contract || c.id) === key);
     if (src) {
       const idx = Object.keys(COIN_POOL).length;
       COIN_POOL[key] = {
         key, name: src.name, icon: src.icon, iconImg: src.iconImg,
-        color: COIN_COLORS[idx%COIN_COLORS.length],
-        contract: src.contract, pts: genRadarPoints(idx*1.7, 90, 100, 8),
+        color: COIN_COLORS[idx % COIN_COLORS.length],
+        contract: src.contract, pts: genRadarPoints(idx * 1.7, 90, 100, 8),
         annotations: [], aiData: null,
         change: src.change, changeUp: src.changeUp,
         liq: src.liq, holders: src.holders,
       };
-      addOrUpdateSeries(key);
-      if (!radarSelected) { radarSelected = key; }
+      if (!radarSelected) radarSelected = key;
     }
   }
   renderCoinPills();
   renderCoinDropdownList();
-  Object.keys(radarSeries).forEach(k => addOrUpdateSeries(k));
 }
 
 function updateCoinSelectHint() {
@@ -8057,10 +7931,9 @@ function updateCoinSelectHint() {
   if (hint) hint.textContent = `已选 ${Object.keys(COIN_POOL).length} / 最多 5 个`;
 }
 
-function switchTimeRange(val) {
-  // lightweight-charts 内置时间轴，这里只记录用于 tooltip
-}
+function switchTimeRange(val) { radarTimeRange = val; }
 
+// 关闭下拉
 document.addEventListener('click', e => {
   if (!e.target.closest('#coinDropdown') && !e.target.closest('#addCoinBtn')) {
     const dd = document.getElementById('coinDropdown');
@@ -8068,86 +7941,223 @@ document.addEventListener('click', e => {
   }
 });
 
-// 初始化默认币种
-async function initRadarCoins() {
-  try {
-    const res = await fetch('https://four.meme/meme-api/v1/public/token/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pageIndex: 1, pageSize: 5, type: 'HOT', listType: 'ADV' })
-    });
-    const data = await res.json();
-    const hotTokens = (data?.data || []).slice(0, 5);
-    if (hotTokens.length) {
-      hotTokens.forEach((t, i) => {
-        const key = t.tokenAddress;
-        if (!COIN_POOL[key]) {
-          const change24 = t.day1Increase ? (parseFloat(t.day1Increase)*100).toFixed(1) : '0';
-          const changeUp = parseFloat(t.day1Increase||0) >= 0;
-          COIN_POOL[key] = {
-            key, name: t.shortName||t.name?.slice(0,12)||'???',
-            icon: guessIcon(t.name, t.shortName),
-            iconImg: t.img ? `https://static.four.meme${t.img}` : null,
-            color: COIN_COLORS[i%COIN_COLORS.length],
-            contract: t.tokenAddress,
-            pts: genRadarPoints(i*1.3, 90, 100, 8),
-            annotations: [], aiData: null,
-            change: `${changeUp?'+':''}${change24}%`, changeUp,
-            liq: t.cap ? `$${parseFloat(t.cap).toFixed(2)}` : '—',
-            holders: t.hold ? `${t.hold}` : '—',
-          };
-        }
-      });
+// ── lightweight-charts 折线图系统 ──
+let radarChart = null;
+let radarSeries = {};
+let radarUpdateTimer = null;
+// radarSelected 已在上方声明
+
+function initLWChart() {
+  const container = document.getElementById('radarLineChart');
+  if (!container || typeof LightweightCharts === 'undefined') return;
+  container.innerHTML = '';
+
+  const isDark = document.documentElement.classList.contains('dark') ||
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const bgColor = isDark ? '#1a1a18' : '#ffffff';
+  const textColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
+  const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
+
+  radarChart = LightweightCharts.createChart(container, {
+    width: container.offsetWidth,
+    height: 300,
+    layout: {
+      background: { type: 'solid', color: bgColor },
+      textColor,
+      fontSize: 10,
+      fontFamily: 'monospace',
+    },
+    grid: {
+      vertLines: { color: gridColor, style: 1 },
+      horzLines: { color: gridColor, style: 1 },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: 'rgba(128,128,128,0.3)', width: 1, style: 3, labelVisible: false },
+      horzLine: { color: 'rgba(128,128,128,0.3)', width: 1, style: 3, labelVisible: false },
+    },
+    rightPriceScale: {
+      borderVisible: false,
+      scaleMargins: { top: 0.12, bottom: 0.12 },
+      textColor,
+    },
+    timeScale: {
+      borderVisible: false,
+      timeVisible: true,
+      secondsVisible: false,
+      rightOffset: 14,
+      fixLeftEdge: false,
+      fixRightEdge: false,
+    },
+    handleScroll: true,
+    handleScale: true,
+  });
+
+  // 响应式 resize
+  const ro = new ResizeObserver(() => {
+    if (radarChart && container.offsetWidth > 0) {
+      radarChart.applyOptions({ width: container.offsetWidth });
     }
-  } catch(e) {
-    // 降级
-    courtData.pending.slice(0,5).forEach((c,i) => {
-      const key = c.contract||c.id;
-      if (!COIN_POOL[key]) {
-        COIN_POOL[key] = {
-          key, name: c.name, icon: c.icon, iconImg: c.iconImg,
-          color: COIN_COLORS[i%COIN_COLORS.length], contract: c.contract,
-          pts: genRadarPoints(i*1.3, 90, 100, 8),
-          annotations: [], aiData: null,
-          change: c.change, changeUp: c.changeUp, liq: c.liq, holders: c.holders,
-        };
+  });
+  ro.observe(container);
+}
+
+function ptsToLWData(pts) {
+  const now = Math.floor(Date.now() / 1000);
+  const intervalSec = 10;
+  return pts.map((v, i) => ({
+    time: now - (pts.length - 1 - i) * intervalSec,
+    value: parseFloat(v.toFixed(4)),
+  }));
+}
+
+function lwAddSeries(key) {
+  const c = COIN_POOL[key];
+  if (!c || !radarChart) return;
+  const isSelected = key === radarSelected;
+  const series = radarChart.addAreaSeries({
+    lineColor: isSelected ? c.color : c.color + '30',
+    topColor: isSelected ? c.color + '18' : 'transparent',
+    bottomColor: 'transparent',
+    lineWidth: isSelected ? 2 : 1,
+    priceLineVisible: false,
+    lastValueVisible: isSelected,
+    crosshairMarkerVisible: isSelected,
+    crosshairMarkerRadius: 4,
+    crosshairMarkerBorderColor: c.color,
+    crosshairMarkerBackgroundColor: c.color,
+  });
+  series.setData(ptsToLWData(c.pts));
+  radarSeries[key] = series;
+}
+
+function lwUpdateSeriesStyle(key) {
+  const s = radarSeries[key];
+  const c = COIN_POOL[key];
+  if (!s || !c) return;
+  const isSelected = key === radarSelected;
+  s.applyOptions({
+    lineColor: isSelected ? c.color : c.color + '30',
+    topColor: isSelected ? c.color + '18' : 'transparent',
+    lineWidth: isSelected ? 2 : 1,
+    lastValueVisible: isSelected,
+    crosshairMarkerVisible: isSelected,
+  });
+}
+
+function lwRemoveSeries(key) {
+  if (radarSeries[key] && radarChart) {
+    try { radarChart.removeSeries(radarSeries[key]); } catch(e) {}
+    delete radarSeries[key];
+  }
+}
+
+function lwRefreshMarkers(key) {
+  const c = COIN_POOL[key];
+  const s = radarSeries[key];
+  if (!c || !s || !c.annotations?.length) return;
+  const now = Math.floor(Date.now() / 1000);
+  const markers = c.annotations.map(a => {
+    const timeOffset = (c.pts.length - 1 - Math.min(a.i, c.pts.length-1)) * 10;
+    return {
+      time: now - timeOffset,
+      position: a.type === 'warn' ? 'aboveBar' : 'belowBar',
+      color: a.type === 'whale' ? '#dc2626' : a.type === 'warn' ? '#d97706' : '#16a34a',
+      shape: a.type === 'break' ? 'circle' : 'arrowUp',
+      size: 1,
+    };
+  }).sort((a, b) => a.time - b.time);
+  try { s.setMarkers(markers); } catch(e) {}
+}
+
+function startRadarUpdate() {
+  if (radarUpdateTimer) clearInterval(radarUpdateTimer);
+  radarUpdateTimer = setInterval(() => {
+    const now = Math.floor(Date.now() / 1000);
+    Object.keys(COIN_POOL).forEach(key => {
+      const c = COIN_POOL[key];
+      const last = c.pts[c.pts.length - 1];
+      const delta = (Math.random() - 0.49) * 2.5;
+      const newVal = Math.max(0.5, last + delta);
+      c.pts.push(newVal);
+      if (c.pts.length > 500) c.pts.shift();
+      if (radarSeries[key]) {
+        try { radarSeries[key].update({ time: now, value: parseFloat(newVal.toFixed(4)) }); } catch(e) {}
       }
     });
-  }
+    if (radarSelected) lwRefreshMarkers(radarSelected);
+  }, 10000);
+}
 
-  // 建系列
-  Object.keys(COIN_POOL).forEach(key => addOrUpdateSeries(key));
-  if (!radarSelected && Object.keys(COIN_POOL).length > 0) {
-    radarSelected = Object.keys(COIN_POOL)[0];
-    Object.keys(radarSeries).forEach(k => addOrUpdateSeries(k));
-    setTimeout(() => triggerAISidePanel(radarSelected), 600);
+// 选中币种
+function selectRadarCoin(key) {
+  radarSelected = key;
+  renderCoinPills();
+  Object.keys(radarSeries).forEach(k => lwUpdateSeriesStyle(k));
+  triggerAISidePanel(key);
+}
+
+// 删除币种
+function removeRadarCoin(key, e) {
+  e.stopPropagation();
+  if (Object.keys(COIN_POOL).length <= 1) return;
+  lwRemoveSeries(key);
+  delete COIN_POOL[key];
+  if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0] || null;
+  renderCoinPills();
+  renderCoinDropdownList();
+}
+
+// 添加币种（下拉）
+function toggleDropdownCoin(key) {
+  if (COIN_POOL[key]) {
+    if (Object.keys(COIN_POOL).length <= 1) return;
+    lwRemoveSeries(key);
+    delete COIN_POOL[key];
+    if (radarSelected === key) radarSelected = Object.keys(COIN_POOL)[0] || null;
+  } else {
+    if (Object.keys(COIN_POOL).length >= 5) { showToast('最多同时显示 5 个币种'); return; }
+    const src = courtData.pending.find(c => (c.contract || c.id) === key);
+    if (src) {
+      const idx = Object.keys(COIN_POOL).length;
+      COIN_POOL[key] = {
+        key, name: src.name, icon: src.icon, iconImg: src.iconImg,
+        color: COIN_COLORS[idx % COIN_COLORS.length],
+        contract: src.contract, pts: genRadarPoints(idx * 1.7, 90, 100, 8),
+        annotations: [], aiData: null,
+        change: src.change, changeUp: src.changeUp,
+        liq: src.liq, holders: src.holders,
+      };
+      if (!radarSelected) radarSelected = key;
+      lwAddSeries(key);
+    }
   }
   renderCoinPills();
   renderCoinDropdownList();
+  Object.keys(radarSeries).forEach(k => lwUpdateSeriesStyle(k));
 }
 
 // KPI 柱状图
 function drawSparkline(canvasId, data, color) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const dpr = window.devicePixelRatio||1;
-  const W = canvas.offsetWidth||100, H = 24;
-  canvas.width = W*dpr; canvas.height = H*dpr;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || 100, H = 24;
+  canvas.width = W * dpr; canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
-  const mn = Math.min(...data)*0.9, mx = Math.max(...data)*1.05;
-  const n = data.length, barW = Math.max(2, W/n-2);
-  data.forEach((v,i) => {
-    const barH = Math.max(2, H*0.85*(v-mn)/(mx-mn||1));
-    const x = i*(W/n)+(W/n-barW)/2, y = H-barH;
-    const isLast = i===n-1;
+  const mn = Math.min(...data) * 0.9, mx = Math.max(...data) * 1.05;
+  const n = data.length, barW = Math.max(2, W / n - 2);
+  data.forEach((v, i) => {
+    const barH = Math.max(2, H * 0.85 * (v - mn) / (mx - mn || 1));
+    const x = i * (W / n) + (W / n - barW) / 2, y = H - barH;
     ctx.fillStyle = color;
-    ctx.globalAlpha = isLast ? 1 : 0.35+0.5*(i/(n-1));
+    ctx.globalAlpha = i === n - 1 ? 1 : 0.35 + 0.5 * (i / (n - 1));
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x,y,barW,barH,2); else ctx.rect(x,y,barW,barH);
+    if (ctx.roundRect) ctx.roundRect(x, y, barW, barH, 2); else ctx.rect(x, y, barW, barH);
     ctx.fill();
   });
-  ctx.globalAlpha=1;
+  ctx.globalAlpha = 1;
 }
 
 function initKpiSparklines() {
@@ -8157,99 +8167,21 @@ function initKpiSparklines() {
   drawSparkline('sparkFear',     [45,50,55,60,58,64,62], '#d97706');
 }
 
-// AI 侧边栏
-async function triggerAISidePanel(key) {
-  const c = COIN_POOL[key];
-  if (!c) return;
-  document.getElementById('aiSideCoinIcon').textContent = c.icon||'⚖️';
-  document.getElementById('aiSideCoinIcon').style.background = '#f5f4f0';
-  document.getElementById('aiSideCoinName').textContent = c.name;
-  document.getElementById('aiSideVerdictBadge').innerHTML = '';
-  document.getElementById('aiSideMetrics').innerHTML = '';
-  document.getElementById('aiSideConfWrap').style.display = 'none';
-  document.getElementById('aiSideText').style.display = 'none';
-  document.getElementById('aiSideBetBtn').style.display = 'none';
-  document.getElementById('aiSideLoading').style.display = 'block';
-
-  if (c.aiData) { renderAISideData(c); return; }
-
-  try {
-    const sys = `你是 Meme 法庭的 AI 法官「链上包公」。严格按 JSON 输出：{"verdict":"BULLISH或BEARISH或NEUTRAL","confidence":数字0到100,"risk":"低风险或中风险或高风险或极高风险","short":"3句精简裁定用\n分隔最后一句扎心"}`;
-    const prompt = `对 four.meme 上的 ${c.name} 进行裁定。流动性：${c.liq||'—'}，涨跌幅：${c.change||'—'}，持仓地址：${c.holders||'—'}`;
-    const raw = await callGemini(sys, prompt);
-    const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
-    c.aiData = parsed;
-    c.annotations = [];
-    if (parsed.verdict==='BEARISH') {
-      c.annotations.push({i:Math.floor(c.pts.length*0.6),type:'warn'});
-      c.annotations.push({i:Math.floor(c.pts.length*0.8),type:'warn'});
-    } else if (parsed.verdict==='BULLISH') {
-      c.annotations.push({i:Math.floor(c.pts.length*0.4),type:'whale'});
-      c.annotations.push({i:Math.floor(c.pts.length*0.75),type:'break'});
-    }
-    refreshAnnotations(key);
-  } catch(e) {
-    c.aiData = {verdict:'NEUTRAL',confidence:50,risk:'中风险',short:'本庭暂时无法审理此案。
-数据不足，持续观察。
-谨慎为上。'};
-  }
-  renderAISideData(c);
-}
-
-function renderAISideData(c) {
-  const d = c.aiData;
-  document.getElementById('aiSideLoading').style.display = 'none';
-  const verdictColor = d.verdict==='BULLISH'?'var(--green)':d.verdict==='BEARISH'?'var(--red)':'var(--amber)';
-  const verdictBg = d.verdict==='BULLISH'?'var(--green-bg)':d.verdict==='BEARISH'?'var(--red-bg)':'var(--amber-bg)';
-  const verdictText = d.verdict==='BULLISH'?'📈 看涨':d.verdict==='BEARISH'?'📉 看跌':'⚖️ 中立';
-  document.getElementById('aiSideVerdictBadge').innerHTML = `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${verdictBg};color:${verdictColor}">${verdictText}</span>`;
-  const metrics = [
-    {lbl:'流动性',val:c.liq||'—'},
-    {lbl:'涨跌幅',val:c.change||'—',color:c.changeUp?'var(--green)':'var(--red)'},
-    {lbl:'持仓地址',val:c.holders||'—'},
-    {lbl:'风险等级',val:d.risk,color:d.risk==='高风险'||d.risk==='极高风险'?'var(--amber)':'var(--text)'},
-    {lbl:'AI 标注',val:`${c.annotations.length} 个`},
-  ];
-  document.getElementById('aiSideMetrics').innerHTML = metrics.map(m =>
-    `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:0.5px solid var(--border)">
-      <span style="color:var(--text3)">${m.lbl}</span>
-      <span style="color:${m.color||'var(--text)'}">${m.val}</span>
-    </div>`
-  ).join('')+'<div style="height:1px"></div>';
-  const confWrap = document.getElementById('aiSideConfWrap');
-  confWrap.style.display='block';
-  document.getElementById('aiSideConfVal').textContent=d.confidence+'%';
-  document.getElementById('aiSideConfBar').style.width=d.confidence+'%';
-  document.getElementById('aiSideConfBar').style.background=verdictColor;
-  const lines=(d.short||'').split('\n').filter(Boolean);
-  const last=lines.pop()||'';
-  const textEl=document.getElementById('aiSideText');
-  textEl.style.display='block';
-  textEl.innerHTML=lines.map(l=>`<span style="color:var(--text2)">${l}</span>`).join('<br>')+(lines.length?'<br>':'')+`<strong style="color:var(--accent)">${last}</strong>`;
-  document.getElementById('aiSideBetBtn').style.display='block';
-}
-
-function aiSideGoBet() {
-  const c = COIN_POOL[radarSelected];
-  if (!c) return;
-  const caseInLive = courtData.live.find(x => x.contract===c.contract||x.name===c.name);
-  if (caseInLive) { showPage('court'); setTimeout(()=>openCourtDetail(caseInLive.id),300); }
-  else { showPage('court'); showToast('该币种尚未开庭，可申请开庭'); }
-}
-
-// 初始化雷达页
 async function initRadarPage() {
-  // 停止旧的更新定时器
   if (radarUpdateTimer) { clearInterval(radarUpdateTimer); radarUpdateTimer = null; }
-  // 清空旧系列
-  Object.keys(radarSeries).forEach(k => {
-    try { if (radarChart) radarChart.removeSeries(radarSeries[k]); } catch(e) {}
-  });
+  Object.keys(radarSeries).forEach(k => { try { if(radarChart) radarChart.removeSeries(radarSeries[k]); } catch(e){} });
   radarSeries = {};
-  // 重建图表
+
   initLWChart();
   initKpiSparklines();
   await initRadarCoins();
+
+  // 把所有币加到图表
+  Object.keys(COIN_POOL).forEach(key => lwAddSeries(key));
+  if (radarSelected) {
+    Object.keys(radarSeries).forEach(k => lwUpdateSeriesStyle(k));
+    setTimeout(() => triggerAISidePanel(radarSelected), 500);
+  }
   startRadarUpdate();
 }
 
@@ -8263,8 +8195,6 @@ window.showPage = function(id) {
     if (radarUpdateTimer) { clearInterval(radarUpdateTimer); radarUpdateTimer = null; }
   }
 };
-
-
 
 
 initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();loadFeaturedData();
