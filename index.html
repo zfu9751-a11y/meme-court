@@ -1363,6 +1363,9 @@ textarea::placeholder{color:var(--text3)}
 .ggm-body{padding:20px 24px}
 .ggm-ways{display:flex;flex-direction:column;gap:12px}
 .ggm-way{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .18s}
+.stake-tier-opt{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 12px;text-align:center;cursor:pointer;transition:all .18s}
+.stake-tier-opt:hover{border-color:var(--accent);background:var(--accent-bg)}
+.stake-tier-opt.selected{border-color:var(--accent);background:var(--accent-bg)}
 .ggm-way:hover{border-color:var(--accent);background:var(--accent-bg)}
 .ggm-way-icon{font-size:28px;flex-shrink:0}
 .ggm-way-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:2px}
@@ -2089,19 +2092,27 @@ textarea::placeholder{color:var(--text3)}
     </div>
     <div class="ggm-body">
       <div class="ggm-ways">
-        <div class="ggm-way" onclick="claimNewbieGavel()">
-          <div class="ggm-way-icon">🎁</div>
-          <div>
-            <div class="ggm-way-title">新人礼包</div>
-            <div class="ggm-way-desc">连接钱包即可领取，每个账户仅限一次</div>
+        <!-- 质押挖矿 -->
+        <div class="ggm-way" onclick="openStakeModal()" style="position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#e8571a,#f59e0b)"></div>
+          <div class="ggm-way-icon">🔒</div>
+          <div style="flex:1">
+            <div class="ggm-way-title">质押挖矿</div>
+            <div class="ggm-way-desc">质押 $GAVEL 锁仓，赚取更多平台代币</div>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#fff8f5;border:1px solid #f5d5c8;color:#c4521a;font-weight:600">7天 8%</span>
+              <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#fff8f5;border:1px solid #f5d5c8;color:#c4521a;font-weight:600">30天 20%</span>
+              <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#fff8f5;border:1px solid #f5d5c8;color:#c4521a;font-weight:600">90天 50%</span>
+            </div>
           </div>
-          <div class="ggm-way-amount" id="newbieClaimBtn">+500 $GAVEL</div>
+          <div class="ggm-way-amount" style="color:var(--accent)">立即质押 →</div>
         </div>
+        <!-- 完成任务 -->
         <div class="ggm-way" style="cursor:default;opacity:.6">
           <div class="ggm-way-icon">📋</div>
           <div>
             <div class="ggm-way-title">完成平台任务</div>
-            <div class="ggm-way-desc">首次投票、首次押注、邀请好友等任务奖励</div>
+            <div class="ggm-way-desc">首次押注、邀请好友等任务奖励</div>
           </div>
           <div class="ggm-way-amount">即将开放</div>
         </div>
@@ -2124,6 +2135,77 @@ textarea::placeholder{color:var(--text3)}
         </div>
         <button class="ggm-buy-btn" id="ggmBuyBtn" onclick="simulateBuyGavel()">🦊 用 MetaMask 支付 0.05 BNB</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 质押悬浮窗 -->
+<div class="get-gavel-overlay" id="stakeOverlay" onclick="closeStakeModal(event)" style="display:none">
+  <div class="get-gavel-modal" style="max-width:460px">
+    <div class="ggm-header">
+      <div>
+        <div class="ggm-title">🔒 质押挖矿</div>
+        <div class="ggm-sub">锁仓 $GAVEL · 赚取平台代币收益</div>
+      </div>
+      <button class="ggm-close" onclick="closeStakeDirect()">✕</button>
+    </div>
+    <div class="ggm-body" style="padding:20px 24px">
+
+      <!-- 三档选择 -->
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em;margin-bottom:10px">选择锁仓周期</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
+        <div class="stake-tier-opt selected" data-days="7" data-apy="8" onclick="selectStakeTier(this)">
+          <div style="font-size:18px;font-weight:800;color:var(--accent);font-family:var(--mono)">8%</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text)">年化收益</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">锁仓 7 天</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">最低 100 $G</div>
+        </div>
+        <div class="stake-tier-opt" data-days="30" data-apy="20" onclick="selectStakeTier(this)">
+          <div style="font-size:18px;font-weight:800;color:var(--accent);font-family:var(--mono)">20%</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text)">年化收益</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">锁仓 30 天</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">最低 500 $G</div>
+        </div>
+        <div class="stake-tier-opt" data-days="90" data-apy="50" onclick="selectStakeTier(this)">
+          <div style="font-size:18px;font-weight:800;color:var(--accent);font-family:var(--mono)">50%</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text)">年化收益</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">锁仓 90 天</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">最低 1,000 $G</div>
+        </div>
+      </div>
+
+      <!-- 数量输入 -->
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em;margin-bottom:8px;display:flex;justify-content:space-between">
+        <span>质押数量</span>
+        <span style="font-weight:400">余额 <span id="stakeBalanceShow" style="color:var(--accent)">0</span> $GAVEL</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="stakeAmountInput" type="number" min="100" placeholder="输入质押数量" oninput="updateStakePreview()"
+          style="flex:1;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-md);font-size:14px;font-family:var(--mono);background:var(--bg2);color:var(--text);outline:none">
+        <button onclick="setStakeMax()" style="padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-md);font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:var(--text2);font-family:var(--sans)">全部</button>
+      </div>
+
+      <!-- 预估收益 -->
+      <div style="background:var(--bg2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px">
+          <span style="color:var(--text3)">预估收益</span>
+          <span style="font-weight:700;color:var(--green);font-family:var(--mono)" id="stakeEstReward">— $GAVEL</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px">
+          <span style="color:var(--text3)">解锁时间</span>
+          <span style="font-weight:600;color:var(--text);font-family:var(--mono)" id="stakeUnlockDate">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--text3)">锁仓期间</span>
+          <span style="font-size:11px;color:var(--red)">不可提前解锁</span>
+        </div>
+      </div>
+
+      <!-- 确认按钮 -->
+      <button onclick="submitStake()" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-lg);font-size:14px;font-weight:800;cursor:pointer;font-family:var(--sans)">
+        🔒 确认质押
+      </button>
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px">质押功能即将上线 · 仅供预览体验</div>
     </div>
   </div>
 </div>
@@ -4561,13 +4643,8 @@ function onWalletConnected(addr, bnbBal) {
   const capsule = document.getElementById('walletCapsule');
   if (capsule) capsule.classList.add('connected');
 
-  // $GAVEL 初始余额（新人礼包）
-  if (gavelBalance === 0) {
-    gavelBalance = 500;
-    showToast('🎉 钱包已连接！BNB: ' + bnbBal.toFixed(4) + ' · 获赠 500 $GAVEL 新人礼包');
-  } else {
-    showToast('✅ 钱包已连接：' + shortAddr(addr) + ' · BNB: ' + bnbBal.toFixed(4));
-  }
+  // 连接成功提示（不再赠送新人礼包）
+  showToast('✅ 钱包已连接：' + shortAddr(addr) + ' · BNB: ' + bnbBal.toFixed(4));
 
   const gavelEl = document.getElementById('gavelBal');
   if (gavelEl) gavelEl.classList.add('show');
@@ -4669,20 +4746,7 @@ async function connectWallet() {
   }
 }
 
-// 检查新人礼包状态
-async function checkNewbieClaim(addr) {
-  try {
-    // newbieClaimed(address) selector
-    const data = '0x' + 'f6626c18' + addr.slice(2).toLowerCase().padStart(64, '0');
-    const result = await readContract(MEME_COURT_ADDRESS, data);
-    const claimed = result && result !== '0x' && parseInt(result, 16) !== 0;
-    if (!claimed) {
-      setTimeout(() => {
-        showToast('🎁 点击领取 500 $GAVEL 新人礼包！', 5000);
-      }, 1500);
-    }
-  } catch(e) {}
-}
+// checkNewbieClaim 已废弃，新人礼包取消
 
 function disconnectWallet() {
   if (!confirm('确认退出钱包？退出后需要重新连接。')) return;
@@ -6607,23 +6671,73 @@ let newbieClaimed = false;
 function openGetGavelModal() {
   if (!walletConnected) { showToast('请先连接钱包'); return; }
   document.getElementById('getGavelOverlay').classList.add('open');
-  document.getElementById('newbieClaimBtn').textContent = newbieClaimed ? '✓ 已领取' : '+500 $GAVEL';
 }
 function closeGetGavel(e) { if (e.target === document.getElementById('getGavelOverlay')) closeGetGavelDirect(); }
 function closeGetGavelDirect() { document.getElementById('getGavelOverlay').classList.remove('open'); }
 
-function claimNewbieGavel() {
-  if (!walletConnected) { showToast('请先连接钱包'); return; }
-  if (newbieClaimed) { showToast('新人礼包已领取过了'); return; }
-  // 调用链上合约
-  claimNewbieOnChain().then(txHash => {
-    if (txHash) {
-      newbieClaimed = true;
-      document.getElementById('newbieClaimBtn').textContent = '✓ 已领取';
-      closeGetGavelDirect();
-    }
-  });
+// ── 质押悬浮窗 ──
+let stakeSelectedDays = 7;
+let stakeSelectedApy = 8;
+
+function openStakeModal() {
+  closeGetGavelDirect();
+  const overlay = document.getElementById('stakeOverlay');
+  overlay.style.display = 'flex';
+  setTimeout(() => overlay.classList.add('open'), 10);
+  // 更新余额显示
+  const balEl = document.getElementById('stakeBalanceShow');
+  if (balEl) balEl.textContent = gavelBalance.toLocaleString();
+  updateStakePreview();
 }
+
+function closeStakeModal(e) {
+  if (e.target === document.getElementById('stakeOverlay')) closeStakeDirect();
+}
+
+function closeStakeDirect() {
+  const overlay = document.getElementById('stakeOverlay');
+  overlay.classList.remove('open');
+  setTimeout(() => overlay.style.display = 'none', 300);
+}
+
+function selectStakeTier(el) {
+  document.querySelectorAll('.stake-tier-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  stakeSelectedDays = parseInt(el.dataset.days);
+  stakeSelectedApy = parseInt(el.dataset.apy);
+  updateStakePreview();
+}
+
+function updateStakePreview() {
+  const amount = parseFloat(document.getElementById('stakeAmountInput').value) || 0;
+  const reward = amount * stakeSelectedApy / 100 * stakeSelectedDays / 365;
+  const rewardEl = document.getElementById('stakeEstReward');
+  const dateEl = document.getElementById('stakeUnlockDate');
+  if (rewardEl) rewardEl.textContent = amount > 0 ? `+${Math.floor(reward).toLocaleString()} $GAVEL` : '— $GAVEL';
+  if (dateEl) {
+    if (amount > 0) {
+      const unlockDate = new Date(Date.now() + stakeSelectedDays * 86400000);
+      dateEl.textContent = unlockDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    } else {
+      dateEl.textContent = '—';
+    }
+  }
+}
+
+function setStakeMax() {
+  const input = document.getElementById('stakeAmountInput');
+  if (input) { input.value = gavelBalance; updateStakePreview(); }
+}
+
+function submitStake() {
+  showToast('🔒 质押功能开发中，敬请期待');
+}
+
+function claimNewbieGavel() {
+  showToast('新人礼包已取消，请通过质押或购买获取 $GAVEL');
+}
+
+
 
 function selectBuyOpt(el, gavel, bnb) {
   selectedBuyGavel = gavel;
