@@ -7745,28 +7745,64 @@ let radarTick = 0;
 let radarTimeRange = '1h';
 let radarHoverX = null;
 
-// 初始化默认4个币种（从 courtData.pending 拿真实数据）
-function initRadarCoins() {
-  const colors = COIN_COLORS;
-  const sources = courtData.pending.slice(0, 4);
-  sources.forEach((c, i) => {
-    const key = c.contract || c.id;
-    if (!COIN_POOL[key]) {
-      COIN_POOL[key] = {
-        key, name: c.name, icon: c.icon, iconImg: c.iconImg || null,
-        color: colors[i % colors.length],
-        contract: c.contract,
-        pts: genRadarPoints(i * 1.3, 60, 100, 10),
-        annotations: [],
-        aiData: null,
-        change: c.change, changeUp: c.changeUp,
-        liq: c.liq, holders: c.holders,
-      };
+// 初始化默认币种：直接调 four.meme 热度榜
+async function initRadarCoins() {
+  try {
+    const res = await fetch('https://four.meme/meme-api/v1/public/token/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndex: 1, pageSize: 5, type: 'HOT', listType: 'ADV' })
+    });
+    const data = await res.json();
+    const hotTokens = (data?.data || []).slice(0, 5);
+
+    if (hotTokens.length) {
+      hotTokens.forEach((t, i) => {
+        const key = t.tokenAddress;
+        if (!COIN_POOL[key]) {
+          const change24 = t.day1Increase ? (parseFloat(t.day1Increase)*100).toFixed(1) : '0';
+          const changeUp = parseFloat(t.day1Increase||0) >= 0;
+          COIN_POOL[key] = {
+            key, name: t.shortName || t.name?.slice(0,12) || '???',
+            icon: guessIcon(t.name, t.shortName),
+            iconImg: t.img ? `https://static.four.meme${t.img}` : null,
+            color: COIN_COLORS[i % COIN_COLORS.length],
+            contract: t.tokenAddress,
+            pts: genRadarPoints(i * 1.3, 60, 100, 10),
+            annotations: [], aiData: null,
+            change: `${changeUp?'+':''}${change24}%`,
+            changeUp,
+            liq: t.cap ? `$${parseFloat(t.cap).toFixed(2)}` : '—',
+            holders: t.hold ? `${t.hold}` : '—',
+            progress: t.progress ? (parseFloat(t.progress)*100).toFixed(1)+'%' : '—',
+          };
+        }
+      });
     }
-  });
+  } catch(e) {
+    // 降级用 courtData.pending
+    const sources = courtData.pending.slice(0, 5);
+    sources.forEach((c, i) => {
+      const key = c.contract || c.id;
+      if (!COIN_POOL[key]) {
+        COIN_POOL[key] = {
+          key, name: c.name, icon: c.icon, iconImg: c.iconImg || null,
+          color: COIN_COLORS[i % COIN_COLORS.length],
+          contract: c.contract,
+          pts: genRadarPoints(i * 1.3, 60, 100, 10),
+          annotations: [], aiData: null,
+          change: c.change, changeUp: c.changeUp,
+          liq: c.liq, holders: c.holders,
+        };
+      }
+    });
+  }
+
   renderCoinPills();
   if (!radarSelected && Object.keys(COIN_POOL).length > 0) {
     radarSelected = Object.keys(COIN_POOL)[0];
+    // 自动触发第一个币的 AI 分析
+    setTimeout(() => triggerAISidePanel(radarSelected), 500);
   }
   renderCoinDropdownList();
 }
@@ -8195,9 +8231,20 @@ function radarAnimLoop() {
   radarAnimFrame = requestAnimationFrame(radarAnimLoop);
 }
 
-function initRadarPage() {
+async function initRadarPage() {
   if (radarAnimFrame) cancelAnimationFrame(radarAnimFrame);
-  initRadarCoins();
+  // 先显示加载提示
+  const canvas = document.getElementById('radarLineChart');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth, H = 200;
+    canvas.width = W; canvas.height = H;
+    ctx.fillStyle = 'rgba(128,128,128,0.3)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('正在拉取 four.meme 实时数据…', W/2, H/2);
+  }
+  await initRadarCoins();
   initKpiSparklines();
   initRadarChartEvents();
   radarAnimLoop();
