@@ -7952,90 +7952,153 @@ function drawRadarChart() {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
 
-  const pad = { top: 16, right: 20, bottom: 28, left: 42 };
+  const pad = { top: 16, right: 20, bottom: 28, left: 48 };
   const iw = W - pad.left - pad.right;
   const ih = H - pad.top - pad.bottom;
 
   const coins = Object.values(COIN_POOL);
   if (!coins.length) return;
 
+  // 价格范围（所有币）
   const allVals = coins.flatMap(c => c.pts);
-  const minV = Math.min(...allVals) * 0.92;
+  const minV = Math.min(...allVals) * 0.94;
   const maxV = Math.max(...allVals) * 1.06;
+  const rangeV = maxV - minV || 1;
 
-  // 网格
+  // 每个数据点在 X 轴占多少像素
+  const maxPts = Math.max(...coins.map(c => c.pts.length));
+  const pxPerPt = iw / Math.max(60, maxPts - 1);
+
+  // 滚动偏移：让最新点始终在右侧，背景网格左移
+  const scrollPx = radarScrollOffset % pxPerPt;
+
+  // 裁剪区域（不画到轴外）
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(pad.left, pad.top, iw, ih);
+  ctx.clip();
+
+  // 滚动网格线（垂直）
+  ctx.strokeStyle = 'rgba(128,128,128,0.08)';
+  ctx.lineWidth = 0.5;
+  const gridSpacing = pxPerPt * 10; // 每10个点一条竖线
+  for (let gx = pad.left + gridSpacing - scrollPx; gx < pad.left + iw; gx += gridSpacing) {
+    ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + ih); ctx.stroke();
+  }
+  ctx.restore();
+
+  // 水平网格线 + Y轴标签
   ctx.strokeStyle = 'rgba(128,128,128,0.1)'; ctx.lineWidth = 0.5;
-  [0,25,50,75,100].forEach(p => {
-    const y = pad.top + ih * (1 - p/100);
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left+iw, y); ctx.stroke();
-    ctx.fillStyle = 'rgba(128,128,128,0.45)'; ctx.font = '9px monospace';
-    ctx.textAlign = 'right'; ctx.fillText(p, pad.left-5, y+3);
+  const yLevels = [0, 25, 50, 75, 100];
+  yLevels.forEach(p => {
+    const y = pad.top + ih * (1 - p / 100);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + iw, y); ctx.stroke();
+    // Y轴价格标签
+    const priceLabel = (minV + rangeV * (p / 100)).toFixed(1);
+    ctx.fillStyle = 'rgba(128,128,128,0.5)';
+    ctx.font = '9px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(priceLabel, pad.left - 4, y + 3);
   });
 
-  // 时间轴
-  ctx.fillStyle = 'rgba(128,128,128,0.45)'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
-  const tLabels = radarTimeRange === '1h' ? ['60m前','45m前','30m前','15m前','现在'] : radarTimeRange === '4h' ? ['4h前','3h前','2h前','1h前','现在'] : ['7天前','5天前','3天前','1天前','现在'];
-  tLabels.forEach((t, i) => { ctx.fillText(t, pad.left + iw*(i/4), H-6); });
+  // 时间轴标签（跟随滚动）
+  ctx.fillStyle = 'rgba(128,128,128,0.5)';
+  ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  const nowMs = Date.now();
+  const msPerPt = RADAR_PT_INTERVAL;
+  for (let i = 0; i <= 4; i++) {
+    const x = pad.left + iw * (i / 4);
+    const secAgo = Math.round((1 - i / 4) * maxPts * msPerPt / 1000);
+    const label = secAgo === 0 ? '现在' : secAgo < 60 ? `${secAgo}s前` : `${Math.round(secAgo/60)}m前`;
+    ctx.fillText(label, x, H - 6);
+  }
 
-  // 绘制曲线（非选中先画，选中后画）
-  [...coins].sort((a,b) => (a.key===radarSelected?1:-1)).forEach(c => {
+  // 曲线（非选中先画）
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(pad.left, pad.top, iw, ih);
+  ctx.clip();
+
+  [...coins].sort((a, b) => (a.key === radarSelected ? 1 : -1)).forEach(c => {
     const n = c.pts.length;
+    if (n < 2) return;
     const isSelected = c.key === radarSelected;
-    ctx.globalAlpha = isSelected ? 1 : 0.18;
+
+    // X坐标：最新点在右侧 pad.left+iw，往左延伸，并加滚动偏移
+    const getX = (i) => pad.left + iw - (n - 1 - i) * pxPerPt - scrollPx;
+    const getY = (v) => pad.top + ih * (1 - (v - minV) / rangeV);
+
+    ctx.globalAlpha = isSelected ? 1 : 0.15;
     ctx.lineWidth = isSelected ? 2.5 : 1;
     ctx.strokeStyle = c.color;
+
     ctx.beginPath();
     c.pts.forEach((v, i) => {
-      const x = pad.left + iw*(i/(n-1));
-      const y = pad.top + ih*(1-(v-minV)/(maxV-minV));
-      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      const x = getX(i), y = getY(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.stroke();
 
     if (isSelected) {
-      // 填充
-      ctx.globalAlpha = 0.06; ctx.fillStyle = c.color;
+      // 填充渐变区域
+      ctx.globalAlpha = 0.07;
+      ctx.fillStyle = c.color;
       ctx.beginPath();
-      c.pts.forEach((v,i) => {
-        const x=pad.left+iw*(i/(n-1)), y=pad.top+ih*(1-(v-minV)/(maxV-minV));
-        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      c.pts.forEach((v, i) => {
+        const x = getX(i), y = getY(v);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
-      ctx.lineTo(pad.left+iw, pad.top+ih); ctx.lineTo(pad.left, pad.top+ih); ctx.closePath(); ctx.fill();
+      ctx.lineTo(getX(n - 1), pad.top + ih);
+      ctx.lineTo(getX(0), pad.top + ih);
+      ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
 
       // AI 标注
-      (c.annotations||[]).forEach(a => {
-        const v = c.pts[a.i] || c.pts[c.pts.length-1];
-        const x = pad.left+iw*(a.i/(n-1));
-        const y = pad.top+ih*(1-(v-minV)/(maxV-minV));
-        if (a.type==='whale') {
-          ctx.fillStyle='#dc2626';
-          ctx.beginPath(); ctx.moveTo(x,y-14); ctx.lineTo(x-5,y-6); ctx.lineTo(x+5,y-6); ctx.closePath(); ctx.fill();
-          ctx.globalAlpha=0.15; ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-        } else if (a.type==='warn') {
-          ctx.fillStyle='#d97706';
-          ctx.beginPath(); ctx.moveTo(x,y-12); ctx.lineTo(x-5,y-4); ctx.lineTo(x+5,y-4); ctx.closePath(); ctx.fill();
+      (c.annotations || []).forEach(a => {
+        const idx = Math.min(a.i, n - 1);
+        const x = getX(idx), y = getY(c.pts[idx]);
+        if (a.type === 'whale') {
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath(); ctx.moveTo(x, y - 14); ctx.lineTo(x - 5, y - 6); ctx.lineTo(x + 5, y - 6); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = 0.15;
+          ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        } else if (a.type === 'warn') {
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x - 5, y - 4); ctx.lineTo(x + 5, y - 4); ctx.closePath(); ctx.fill();
         } else {
-          ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#16a34a';
+          ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
         }
       });
 
-      // 最新价格点闪烁
-      const lastV = c.pts[c.pts.length-1];
-      const lx=pad.left+iw, ly=pad.top+ih*(1-(lastV-minV)/(maxV-minV));
-      const pulse = 0.4+0.4*Math.sin(radarTick*0.15);
-      ctx.globalAlpha=pulse*0.4; ctx.fillStyle=c.color;
-      ctx.beginPath(); ctx.arc(lx,ly,9,0,Math.PI*2); ctx.fill();
-      ctx.globalAlpha=1; ctx.fillStyle=c.color;
-      ctx.beginPath(); ctx.arc(lx,ly,3.5,0,Math.PI*2); ctx.fill();
+      // 最新价格点（右侧固定，闪烁）
+      const lastV = c.pts[n - 1];
+      const lx = getX(n - 1), ly = getY(lastV);
+      const pulse = 0.3 + 0.3 * Math.sin(radarTick * 0.1);
+      ctx.globalAlpha = pulse; ctx.fillStyle = c.color;
+      ctx.beginPath(); ctx.arc(lx, ly, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = c.color;
+      ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+
+      // 价格标签（右侧）
+      ctx.fillStyle = c.color;
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(lastV.toFixed(1), lx + 8, ly + 3);
     }
-    ctx.globalAlpha=1;
+
+    ctx.globalAlpha = 1;
   });
 
+  ctx.restore();
+
   // hover 竖线
-  if (radarHoverX !== null) {
-    ctx.strokeStyle='rgba(128,128,128,0.3)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(radarHoverX,pad.top); ctx.lineTo(radarHoverX,pad.top+ih); ctx.stroke();
+  if (radarHoverX !== null && radarHoverX > pad.left) {
+    ctx.strokeStyle = 'rgba(128,128,128,0.3)'; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(radarHoverX, pad.top); ctx.lineTo(radarHoverX, pad.top + ih); ctx.stroke();
     ctx.setLineDash([]);
   }
 }
@@ -8196,23 +8259,31 @@ function aiSideGoBet() {
 }
 
 // ── KPI Sparkline ──
+// ── KPI 柱状图 ──
 function drawSparkline(canvasId, data, color) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const dpr = window.devicePixelRatio||1;
-  const W = canvas.offsetWidth||100, H = 20;
-  canvas.width = W*dpr; canvas.height = H*dpr;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || 100, H = 24;
+  canvas.width = W * dpr; canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr,dpr);
-  const mn = Math.min(...data), mx = Math.max(...data);
-  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7;
-  ctx.beginPath();
-  data.forEach((v,i) => {
-    const x = W*(i/(data.length-1));
-    const y = H*(1-(v-mn)/(mx-mn||1))*0.85+H*0.05;
-    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  ctx.scale(dpr, dpr);
+  const mn = Math.min(...data) * 0.9;
+  const mx = Math.max(...data) * 1.05;
+  const n = data.length;
+  const barW = Math.max(2, W / n - 2);
+  data.forEach((v, i) => {
+    const barH = Math.max(2, H * 0.85 * (v - mn) / (mx - mn || 1));
+    const x = i * (W / n) + (W / n - barW) / 2;
+    const y = H - barH;
+    const isLast = i === n - 1;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = isLast ? 1 : 0.35 + 0.5 * (i / (n - 1));
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 2) : ctx.rect(x, y, barW, barH);
+    ctx.fill();
   });
-  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 function initKpiSparklines() {
@@ -8222,16 +8293,33 @@ function initKpiSparklines() {
   drawSparkline('sparkFear',     [45,50,55,60,58,64,62], '#d97706');
 }
 
-// ── 动画循环 ──
+// ── 动画循环：滚动时间轴，每10秒追加真实数据点 ──
+let radarScrollOffset = 0; // 滚动偏移（像素）
+const RADAR_PX_PER_SEC = 0.4; // 每秒滚动速度（像素）
+const RADAR_PT_INTERVAL = 10000; // 真实数据更新间隔（10秒）
+let radarLastPtTime = Date.now();
+
 function radarAnimLoop() {
   radarTick++;
-  if (radarTick % 4 === 0) {
+  const now = Date.now();
+
+  // 时间轴持续滚动
+  radarScrollOffset += RADAR_PX_PER_SEC / 60; // 60fps
+
+  // 每10秒追加一个新数据点（模拟真实价格更新）
+  if (now - radarLastPtTime > RADAR_PT_INTERVAL) {
+    radarLastPtTime = now;
     Object.values(COIN_POOL).forEach(c => {
-      const last = c.pts[c.pts.length-1];
-      c.pts.push(Math.max(0.5, last + (Math.random()-0.47)*8));
-      if (c.pts.length > 60) c.pts.shift();
+      const last = c.pts[c.pts.length - 1];
+      // 价格变化很小（模拟真实市场微波动）
+      const delta = (Math.random() - 0.49) * 3;
+      c.pts.push(Math.max(0.5, last + delta));
+      if (c.pts.length > 120) c.pts.shift();
+      // 滚动偏移重置（已有新点，坐标系重建）
+      radarScrollOffset = 0;
     });
   }
+
   drawRadarChart();
   radarAnimFrame = requestAnimationFrame(radarAnimLoop);
 }
