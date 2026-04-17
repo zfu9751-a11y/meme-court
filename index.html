@@ -1798,7 +1798,7 @@ textarea::placeholder{color:var(--text3)}
 
           <!-- Canvas 折线图 -->
           <div style="padding:12px 14px 8px;position:relative">
-            <canvas id="radarLineChart" style="width:100%;display:block;cursor:crosshair" height="200"></canvas>
+            <canvas id="radarLineChart" style="width:100%;display:block;cursor:crosshair" height="300"></canvas>
             <div id="chartTooltip" style="display:none;position:absolute;background:var(--white);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;pointer-events:none;z-index:100;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.1)"></div>
           </div>
 
@@ -7946,147 +7946,141 @@ function drawRadarChart() {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth;
-  const H = 200;
+  const H = 300;
   canvas.width = W * dpr; canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
 
-  const pad = { top: 16, right: 20, bottom: 28, left: 48 };
+  const pad = { top: 20, right: 72, bottom: 32, left: 52 };
   const iw = W - pad.left - pad.right;
   const ih = H - pad.top - pad.bottom;
 
   const coins = Object.values(COIN_POOL);
   if (!coins.length) return;
 
-  // 价格范围（所有币）
-  const allVals = coins.flatMap(c => c.pts);
-  const minV = Math.min(...allVals) * 0.94;
-  const maxV = Math.max(...allVals) * 1.06;
-  const rangeV = maxV - minV || 1;
+  const VISIBLE_PTS = 80; // 可视区域显示多少个点
+  const pxPerPt = iw / VISIBLE_PTS; // 每点占多少像素
 
-  // 每个数据点在 X 轴占多少像素
-  const maxPts = Math.max(...coins.map(c => c.pts.length));
-  const pxPerPt = iw / Math.max(60, maxPts - 1);
+  // 价格范围只看可见区域内的点
+  const visibleVals = coins.flatMap(c => c.pts.slice(-VISIBLE_PTS));
+  const rawMin = Math.min(...visibleVals);
+  const rawMax = Math.max(...visibleVals);
+  const padding = (rawMax - rawMin) * 0.15 || 5;
+  const minV = rawMin - padding;
+  const maxV = rawMax + padding;
+  const rangeV = maxV - minV;
 
-  // 滚动偏移：让最新点始终在右侧，背景网格左移
-  const scrollPx = radarScrollOffset % pxPerPt;
+  // Y坐标转换
+  const getY = v => pad.top + ih * (1 - (v - minV) / rangeV);
 
-  // 裁剪区域（不画到轴外）
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(pad.left, pad.top, iw, ih);
-  ctx.clip();
+  // X坐标：最新点永远在右侧 pad.left+iw，往左按 pxPerPt 间隔排列，加连续滚动偏移
+  const getX = (idxFromEnd) => pad.left + iw - idxFromEnd * pxPerPt + radarScrollOffset % pxPerPt;
 
-  // 滚动网格线（垂直）
+  // 水平网格线 + Y轴价格标签
   ctx.strokeStyle = 'rgba(128,128,128,0.08)';
   ctx.lineWidth = 0.5;
-  const gridSpacing = pxPerPt * 10; // 每10个点一条竖线
-  for (let gx = pad.left + gridSpacing - scrollPx; gx < pad.left + iw; gx += gridSpacing) {
+  const ySteps = 5;
+  for (let i = 0; i <= ySteps; i++) {
+    const v = minV + rangeV * (i / ySteps);
+    const y = getY(v);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + iw, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(128,128,128,0.45)';
+    ctx.font = '9px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(1), pad.left - 5, y + 3);
+  }
+
+  // 垂直网格线（滚动）
+  ctx.strokeStyle = 'rgba(128,128,128,0.06)'; ctx.lineWidth = 0.5;
+  const gridPts = 10; // 每10个点一条竖线
+  const gridPx = gridPts * pxPerPt;
+  const offsetX = (radarScrollOffset % gridPx);
+  for (let gx = pad.left + offsetX; gx < pad.left + iw; gx += gridPx) {
     ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + ih); ctx.stroke();
   }
-  ctx.restore();
 
-  // 水平网格线 + Y轴标签
-  ctx.strokeStyle = 'rgba(128,128,128,0.1)'; ctx.lineWidth = 0.5;
-  const yLevels = [0, 25, 50, 75, 100];
-  yLevels.forEach(p => {
-    const y = pad.top + ih * (1 - p / 100);
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + iw, y); ctx.stroke();
-    // Y轴价格标签
-    const priceLabel = (minV + rangeV * (p / 100)).toFixed(1);
-    ctx.fillStyle = 'rgba(128,128,128,0.5)';
-    ctx.font = '9px monospace'; ctx.textAlign = 'right';
-    ctx.fillText(priceLabel, pad.left - 4, y + 3);
-  });
-
-  // 时间轴标签（跟随滚动）
+  // 时间轴标签
   ctx.fillStyle = 'rgba(128,128,128,0.5)';
   ctx.font = '9px monospace'; ctx.textAlign = 'center';
-  const nowMs = Date.now();
-  const msPerPt = RADAR_PT_INTERVAL;
+  const secPerPt = RADAR_PT_INTERVAL / 1000;
   for (let i = 0; i <= 4; i++) {
     const x = pad.left + iw * (i / 4);
-    const secAgo = Math.round((1 - i / 4) * maxPts * msPerPt / 1000);
-    const label = secAgo === 0 ? '现在' : secAgo < 60 ? `${secAgo}s前` : `${Math.round(secAgo/60)}m前`;
+    const ptsAgo = Math.round((1 - i / 4) * VISIBLE_PTS);
+    const secAgo = ptsAgo * secPerPt;
+    const label = secAgo === 0 ? '现在' : secAgo < 60 ? `${Math.round(secAgo)}s前` : `${Math.round(secAgo / 60)}m前`;
     ctx.fillText(label, x, H - 6);
   }
 
-  // 曲线（非选中先画）
+  // 裁剪绘图区
   ctx.save();
   ctx.beginPath();
   ctx.rect(pad.left, pad.top, iw, ih);
   ctx.clip();
 
+  // 非选中先画，选中后画
   [...coins].sort((a, b) => (a.key === radarSelected ? 1 : -1)).forEach(c => {
-    const n = c.pts.length;
+    const pts = c.pts.slice(-VISIBLE_PTS);
+    const n = pts.length;
     if (n < 2) return;
     const isSelected = c.key === radarSelected;
 
-    // X坐标：最新点在右侧 pad.left+iw，往左延伸，并加滚动偏移
-    const getX = (i) => pad.left + iw - (n - 1 - i) * pxPerPt - scrollPx;
-    const getY = (v) => pad.top + ih * (1 - (v - minV) / rangeV);
-
-    ctx.globalAlpha = isSelected ? 1 : 0.15;
-    ctx.lineWidth = isSelected ? 2.5 : 1;
+    ctx.globalAlpha = isSelected ? 1 : 0.07;
+    ctx.lineWidth = isSelected ? 1.8 : 1;
     ctx.strokeStyle = c.color;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
     ctx.beginPath();
-    c.pts.forEach((v, i) => {
-      const x = getX(i), y = getY(v);
+    pts.forEach((v, i) => {
+      const idxFromEnd = n - 1 - i;
+      const x = getX(idxFromEnd);
+      const y = getY(v);
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.stroke();
 
     if (isSelected) {
-      // 填充渐变区域
-      ctx.globalAlpha = 0.07;
+      // 填充区域（极淡）
+      ctx.globalAlpha = 0.05;
       ctx.fillStyle = c.color;
       ctx.beginPath();
-      c.pts.forEach((v, i) => {
-        const x = getX(i), y = getY(v);
+      pts.forEach((v, i) => {
+        const x = getX(n - 1 - i), y = getY(v);
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
-      ctx.lineTo(getX(n - 1), pad.top + ih);
       ctx.lineTo(getX(0), pad.top + ih);
+      ctx.lineTo(getX(n - 1), pad.top + ih);
       ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
 
       // AI 标注
       (c.annotations || []).forEach(a => {
-        const idx = Math.min(a.i, n - 1);
-        const x = getX(idx), y = getY(c.pts[idx]);
+        const ptIdx = Math.max(0, pts.length - 1 - (c.pts.length - 1 - a.i));
+        if (ptIdx < 0 || ptIdx >= n) return;
+        const x = getX(n - 1 - ptIdx), y = getY(pts[ptIdx]);
         if (a.type === 'whale') {
           ctx.fillStyle = '#dc2626';
-          ctx.beginPath(); ctx.moveTo(x, y - 14); ctx.lineTo(x - 5, y - 6); ctx.lineTo(x + 5, y - 6); ctx.closePath(); ctx.fill();
-          ctx.globalAlpha = 0.15;
-          ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
-          ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x - 4, y - 5); ctx.lineTo(x + 4, y - 5); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
         } else if (a.type === 'warn') {
           ctx.fillStyle = '#d97706';
-          ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x - 5, y - 4); ctx.lineTo(x + 5, y - 4); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x, y - 11); ctx.lineTo(x - 4, y - 4); ctx.lineTo(x + 4, y - 4); ctx.closePath(); ctx.fill();
         } else {
           ctx.fillStyle = '#16a34a';
-          ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
         }
       });
 
-      // 最新价格点（右侧固定，闪烁）
-      const lastV = c.pts[n - 1];
-      const lx = getX(n - 1), ly = getY(lastV);
-      const pulse = 0.3 + 0.3 * Math.sin(radarTick * 0.1);
-      ctx.globalAlpha = pulse; ctx.fillStyle = c.color;
-      ctx.beginPath(); ctx.arc(lx, ly, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1; ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+      // 最新点：右侧固定，闪烁圆点
+      const lastV = pts[n - 1];
+      const lx = getX(0), ly = getY(lastV);
+      const pulse = 0.25 + 0.25 * Math.sin(radarTick * 0.08);
+      ctx.globalAlpha = pulse;
       ctx.fillStyle = c.color;
-      ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
-
-      // 价格标签（右侧）
+      ctx.beginPath(); ctx.arc(lx, ly, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.fillStyle = c.color;
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText(lastV.toFixed(1), lx + 8, ly + 3);
+      ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2); ctx.fill();
     }
 
     ctx.globalAlpha = 1;
@@ -8094,9 +8088,28 @@ function drawRadarChart() {
 
   ctx.restore();
 
+  // 右侧价格标签（选中币 + 所有币）
+  coins.forEach(c => {
+    const pts = c.pts.slice(-VISIBLE_PTS);
+    const lastV = pts[pts.length - 1];
+    const ly = getY(lastV);
+    const isSelected = c.key === radarSelected;
+    ctx.globalAlpha = isSelected ? 1 : 0.4;
+    ctx.fillStyle = c.color;
+    ctx.font = isSelected ? '10px monospace' : '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(lastV.toFixed(1), pad.left + iw + 5, ly + 3);
+    // 小横线连接
+    ctx.strokeStyle = c.color; ctx.lineWidth = 0.5;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(pad.left + iw, ly); ctx.lineTo(pad.left + iw + 4, ly); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  });
+
   // hover 竖线
-  if (radarHoverX !== null && radarHoverX > pad.left) {
-    ctx.strokeStyle = 'rgba(128,128,128,0.3)'; ctx.lineWidth = 1;
+  if (radarHoverX !== null && radarHoverX > pad.left && radarHoverX < pad.left + iw) {
+    ctx.strokeStyle = 'rgba(128,128,128,0.25)'; ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(radarHoverX, pad.top); ctx.lineTo(radarHoverX, pad.top + ih); ctx.stroke();
     ctx.setLineDash([]);
@@ -8295,7 +8308,7 @@ function initKpiSparklines() {
 
 // ── 动画循环：滚动时间轴，每10秒追加真实数据点 ──
 let radarScrollOffset = 0; // 滚动偏移（像素）
-const RADAR_PX_PER_SEC = 0.4; // 每秒滚动速度（像素）
+const RADAR_PX_PER_SEC = 1.2; // 每秒滚动速度（像素）— 模拟时间流逝
 const RADAR_PT_INTERVAL = 10000; // 真实数据更新间隔（10秒）
 let radarLastPtTime = Date.now();
 
@@ -8330,7 +8343,7 @@ async function initRadarPage() {
   const canvas = document.getElementById('radarLineChart');
   if (canvas) {
     const ctx = canvas.getContext('2d');
-    const W = canvas.offsetWidth, H = 200;
+    const W = canvas.offsetWidth, H = 300;
     canvas.width = W; canvas.height = H;
     ctx.fillStyle = 'rgba(128,128,128,0.3)';
     ctx.font = '13px sans-serif';
