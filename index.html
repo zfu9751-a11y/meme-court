@@ -1288,6 +1288,8 @@ textarea::placeholder{color:var(--text3)}
 .court-tabs-right{margin-left:auto;padding-bottom:10px}
 .court-launch-btn{display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:all .15s}
 .court-launch-btn:hover{opacity:.88;transform:translateY(-1px)}
+.cc-inject-btn{padding:7px 10px;background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:var(--radius-sm);font-size:11px;font-weight:700;color:var(--green);cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
+.cc-inject-btn:hover{background:var(--green);color:#fff;border-color:var(--green)}
 
 /* 开庭广场筛选 pills */
 .court-filter-bar{display:flex;align-items:center;gap:6px;margin-bottom:20px;flex-wrap:wrap}
@@ -1312,9 +1314,6 @@ textarea::placeholder{color:var(--text3)}
 /* Demo 结算按钮 */
 .cc-demo-settle{width:100%;margin-top:8px;padding:7px;background:linear-gradient(90deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:opacity .15s;letter-spacing:.02em}
 .cc-demo-settle:hover{opacity:.88}
-/* 注入 BNB 按钮 */
-.cc-inject-btn{padding:7px 10px;background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:var(--radius-sm);font-size:11px;font-weight:700;color:var(--green);cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
-.cc-inject-btn:hover{background:var(--green);color:#fff;border-color:var(--green)}
 
 /* 开庭卡片网格 */
 .court-cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -5690,26 +5689,28 @@ function timeAgo(isoTime) {
 
 async function fetchFourMemeTokens() {
   try {
-    // 六路并发：新币/热度/涨幅 各拉两页，每页 50 条
-    const queries = [
-      { type:'NEW',      page:1 }, { type:'NEW',      page:2 },
-      { type:'HOT',      page:1 }, { type:'HOT',      page:2 },
-      { type:'INCREASE', page:1 }, { type:'INCREASE', page:2 },
-    ];
-    const results = await Promise.allSettled(queries.map(q =>
+    // 三榜并发：新币 + 热度 + 涨幅
+    const [newRes, hotRes, gainRes] = await Promise.allSettled([
       fetch('https://four.meme/meme-api/v1/public/token/search', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ pageIndex:q.page, pageSize:50, type:q.type, listType:'ADV' })
-      })
-    ));
+        body: JSON.stringify({ pageIndex:1, pageSize:20, type:'NEW',      listType:'ADV' })
+      }),
+      fetch('https://four.meme/meme-api/v1/public/token/search', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pageIndex:1, pageSize:20, type:'HOT',      listType:'ADV' })
+      }),
+      fetch('https://four.meme/meme-api/v1/public/token/search', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pageIndex:1, pageSize:20, type:'INCREASE', listType:'ADV' })
+      }),
+    ]);
 
     // 合并去重
     const seen = new Set();
     const allTokens = [];
-    for (const r of results) {
+    for (const r of [newRes, hotRes, gainRes]) {
       if (r.status !== 'fulfilled') continue;
-      let data;
-      try { data = await r.value.json(); } catch(e) { continue; }
+      const data = await r.value.json();
       for (const t of (data?.data || [])) {
         if (!t.tokenAddress || seen.has(t.tokenAddress)) continue;
         seen.add(t.tokenAddress);
@@ -5718,7 +5719,6 @@ async function fetchFourMemeTokens() {
     }
     const tokens = allTokens;
     if (!tokens.length) return;
-    console.log(`📡 four.meme 拉取：${tokens.length} 个原始代币`);
 
     // 转换成 courtData 格式并注入候审队列
     courtData.pending = tokens.map(t => {
@@ -5739,8 +5739,8 @@ async function fetchFourMemeTokens() {
         timer: '候审中', urgent: false,
         betUp: 0, betDown: 0,
         pool: Math.max(100, Math.floor(vol * 0.01)),
-        bnbPool: 0,          // 真实 BNB 奖池，默认 0（无项目方注入）
-        injectedBnb: 0,      // 累计注入 BNB
+        bnbPool: 0,
+        injectedBnb: 0,
         participants: 0,
         liq: volStr,
         holders: t.hold ? `${t.hold}` : '—',
@@ -5858,9 +5858,9 @@ const courtData = {
       tier:'fast', tierLabel:'快审', tierCls:'cc-tier-fast',
       timer:'2h 58m', urgent:false,
       betUp:62, betDown:38,
-      pool:4200, bnbPool:0, injectedBnb:0, participants:89,
+      pool:4200, participants:89,
       liq:'$48K', holders:'312', change:'+127%', changeUp:true, whale:'🐳买入',
-      initiator:'four.meme 自动',
+      initiator:'项目方',
       openPrice: 0.00048,
       endTime: Date.now() + 3 * 3600 * 1000,
     },
@@ -5969,12 +5969,10 @@ let currentCourtFilter = 'all';
 
 /* ══ 档位临界标准（快审3h / 标准24h / 深审7天）══ */
 const TIER_THRESHOLDS = {
-  fast:     { minCapUsd:500,     maxCapUsd:100000,  minHolders:0,    minChange:20, duration:3*3600000,        maxInjectBnb:0.5 },
-  standard: { minCapUsd:100000,  maxCapUsd:1000000, minHolders:300,  minChange:0,  duration:24*3600000,       maxInjectBnb:2.0 },
-  deep:     { minCapUsd:1000000, maxCapUsd:Infinity, minHolders:2000, minChange:0, duration:7*24*3600000,     maxInjectBnb:10.0 },
+  fast:     { minCapUsd:1000,    maxCapUsd:100000,  minHolders:0,    minChange:20, duration:3*3600000 },
+  standard: { minCapUsd:100000,  maxCapUsd:1000000, minHolders:300,  minChange:0,  duration:24*3600000 },
+  deep:     { minCapUsd:1000000, maxCapUsd:Infinity, minHolders:2000, minChange:0, duration:7*24*3600000 },
 };
-// 注入比例：0.01 BNB = 1小时
-const BNB_PER_HOUR = 0.01;
 
 function classifyTier(cap, holders, change24h) {
   const capN  = parseFloat(cap)     || 0;
@@ -6119,7 +6117,7 @@ function renderCourtCards() {
               <span style="color:${(c.bnbPool||0)>0?'var(--green)':'var(--text3)'}">${(c.bnbPool||0)>0?(c.bnbPool).toFixed(3)+' BNB':'0 BNB'}</span>
               <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
             </div>
-            <div class="cc-pool-lbl">奖池 · ${c.initiator}${(c.injectedBnb||0)>0?' · 已注入'+c.injectedBnb.toFixed(3)+'BNB':''}</div>
+            <div class="cc-pool-lbl">奖池 · ${c.initiator}${(c.injectedBnb||0)>0?' · 已注入 '+(c.injectedBnb).toFixed(3)+' BNB':''}</div>
           </div>
           <div class="cc-bottom-right">
             <span class="cc-participants">${c.participants>0?c.participants+'人参与':'等待中'}</span>
@@ -8780,7 +8778,7 @@ window.showPage = function(id) {
 
 initDanmaku();renderNewCoins();renderRankList();renderWhaleFeed();renderNotes();renderArchiveHistory();updateCd();initBetData();updateBetDeadline();initLandingAnimations();renderCourtCards();renderHotCourtCards();renderBscTable();renderBscFeed();startDexAutoRefresh();loadFeaturedData();
 fetchFourMemeTokens();
-setInterval(fetchFourMemeTokens, 2 * 60 * 1000); // 每 2 分钟刷新（快审代币生命周期短）
+setInterval(fetchFourMemeTokens, 5 * 60 * 1000); // 每 5 分钟刷新
 
 // 清理旧版申请案件缓存（v1 已废弃）
 try { localStorage.removeItem('mc_live_cases'); } catch(e) {}
@@ -8792,19 +8790,17 @@ checkExistingConnection();
 /* ══════════════════════════════════════════════════
    注入 BNB 系统
 ══════════════════════════════════════════════════ */
+const BNB_PER_HOUR = 0.01;
 
 function openInjectModal(caseId) {
   const c = [...courtData.live].find(x => x.id === caseId);
   if (!c) return;
-
   const thr = TIER_THRESHOLDS[c.tier || 'fast'];
   const maxInject = thr?.maxInjectBnb || 0.5;
   const injected  = c.injectedBnb || 0;
   const remaining = Math.max(0, maxInject - injected);
-  const maxHours  = Math.floor(remaining / BNB_PER_HOUR);
   const timeLeft  = c.endTime ? formatCountdown(c.endTime) : c.timer;
 
-  // 创建弹窗
   let overlay = document.getElementById('injectBnbOverlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -8814,31 +8810,24 @@ function openInjectModal(caseId) {
     document.body.appendChild(overlay);
   }
 
+  const quickBtns = [0.01,0.05,0.1,0.5].filter(v=>v<=remaining+0.001).map(v=>`
+    <button onclick="setInjectAmount(${v})" style="flex:1;padding:6px 4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:11px;font-weight:700;color:#374151;cursor:pointer;font-family:inherit"
+      onmouseover="this.style.background='#f0fdf4';this.style.borderColor='#16a34a';this.style.color='#16a34a'"
+      onmouseout="this.style.background='#f9fafb';this.style.borderColor='#e5e7eb';this.style.color='#374151'">
+      +${v} BNB
+    </button>`).join('');
+
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:20px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.25);animation:modal-in .25s cubic-bezier(.34,1.2,.64,1) forwards">
-      <!-- Header -->
       <div style="background:linear-gradient(135deg,#064e3b,#065f46);padding:20px 24px 16px">
         <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);letter-spacing:.08em;margin-bottom:6px">💉 注入 BNB · ${c.icon} ${c.name}</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.7)">每注入 <strong style="color:#4ade80">0.01 BNB</strong> 延长开庭 <strong style="color:#4ade80">1 小时</strong>，全部进入奖池</div>
       </div>
-
-      <!-- 当前状态 -->
-      <div style="padding:16px 24px;border-bottom:1px solid #f0fdf4;background:#f0fdf4;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
-        <div>
-          <div style="font-size:10px;color:#6b7280;margin-bottom:3px">剩余时间</div>
-          <div style="font-size:14px;font-weight:800;color:#111">${timeLeft}</div>
-        </div>
-        <div>
-          <div style="font-size:10px;color:#6b7280;margin-bottom:3px">当前 BNB 奖池</div>
-          <div style="font-size:14px;font-weight:800;color:#16a34a">${injected.toFixed(3)} BNB</div>
-        </div>
-        <div>
-          <div style="font-size:10px;color:#6b7280;margin-bottom:3px">还可注入</div>
-          <div style="font-size:14px;font-weight:800;color:#111">${remaining.toFixed(3)} BNB</div>
-        </div>
+      <div style="padding:14px 24px;border-bottom:1px solid #f0fdf4;background:#f0fdf4;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
+        <div><div style="font-size:10px;color:#6b7280;margin-bottom:3px">剩余时间</div><div style="font-size:14px;font-weight:800;color:#111">${timeLeft}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;margin-bottom:3px">当前 BNB 奖池</div><div style="font-size:14px;font-weight:800;color:#16a34a">${injected.toFixed(3)} BNB</div></div>
+        <div><div style="font-size:10px;color:#6b7280;margin-bottom:3px">还可注入</div><div style="font-size:14px;font-weight:800;color:#111">${remaining.toFixed(3)} BNB</div></div>
       </div>
-
-      <!-- 输入区 -->
       <div style="padding:20px 24px">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">注入金额</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -8847,34 +8836,20 @@ function openInjectModal(caseId) {
             oninput="updateInjectPreview()" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e5e7eb'">
           <span style="font-size:14px;font-weight:700;color:#6b7280">BNB</span>
         </div>
-
-        <!-- 快捷金额 -->
-        <div style="display:flex;gap:6px;margin-bottom:14px">
-          ${[0.01,0.05,0.1,0.5].filter(v=>v<=remaining).map(v=>`
-            <button onclick="setInjectAmount(${v})" style="flex:1;padding:6px 4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:11px;font-weight:700;color:#374151;cursor:pointer;font-family:inherit"
-              onmouseover="this.style.background='#f0fdf4';this.style.borderColor='#16a34a';this.style.color='#16a34a'"
-              onmouseout="this.style.background='#f9fafb';this.style.borderColor='#e5e7eb';this.style.color='#374151'">
-              +${v} BNB
-            </button>`).join('')}
-        </div>
-
-        <!-- 预览 -->
+        <div style="display:flex;gap:6px;margin-bottom:14px">${quickBtns}</div>
         <div id="injectPreview" style="padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:14px;font-size:12px;color:#166534;display:none">
           注入后：延长 <strong id="injectHours">0</strong> 小时 · 奖池 +<strong id="injectBnbAdd">0</strong> BNB
         </div>
-
-        <!-- 进度条：已注入 / 上限 -->
         <div style="margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;margin-bottom:4px">
-            <span>累计注入</span><span>${injected.toFixed(3)} / ${maxInject} BNB（上限）</span>
+            <span>累计注入</span><span>${injected.toFixed(3)} / ${maxInject} BNB 上限</span>
           </div>
           <div style="height:4px;background:#e5e7eb;border-radius:99px;overflow:hidden">
-            <div style="height:100%;width:${Math.min(100,(injected/maxInject)*100).toFixed(1)}%;background:#16a34a;border-radius:99px"></div>
+            <div style="height:100%;width:${Math.min(100,maxInject>0?(injected/maxInject)*100:0).toFixed(1)}%;background:#16a34a;border-radius:99px"></div>
           </div>
         </div>
-
         <button id="injectConfirmBtn" onclick="executeInject('${caseId}')"
-          style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s;opacity:.5;pointer-events:none">
+          style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;opacity:.5;pointer-events:none;transition:opacity .15s">
           🦊 MetaMask 确认注入
         </button>
         <button onclick="document.getElementById('injectBnbOverlay').style.display='none'"
@@ -8883,9 +8858,7 @@ function openInjectModal(caseId) {
         </button>
       </div>
     </div>`;
-
   overlay.style.display = 'flex';
-  overlay._caseId = caseId;
 }
 
 function setInjectAmount(val) {
@@ -8896,18 +8869,14 @@ function setInjectAmount(val) {
 function updateInjectPreview() {
   const input = document.getElementById('injectAmountInput');
   const preview = document.getElementById('injectPreview');
-  const hoursEl = document.getElementById('injectHours');
-  const bnbEl   = document.getElementById('injectBnbAdd');
-  const btn     = document.getElementById('injectConfirmBtn');
+  const btn = document.getElementById('injectConfirmBtn');
   if (!input || !preview) return;
-
   const val = parseFloat(input.value) || 0;
   const hours = Math.floor(val / BNB_PER_HOUR);
-
   if (val >= 0.01) {
     preview.style.display = 'block';
-    if (hoursEl) hoursEl.textContent = hours;
-    if (bnbEl)   bnbEl.textContent   = val.toFixed(3);
+    const h = document.getElementById('injectHours'); if(h) h.textContent = hours;
+    const b = document.getElementById('injectBnbAdd'); if(b) b.textContent = val.toFixed(3);
     if (btn) { btn.style.opacity='1'; btn.style.pointerEvents='auto'; }
   } else {
     preview.style.display = 'none';
@@ -8917,53 +8886,42 @@ function updateInjectPreview() {
 
 async function executeInject(caseId) {
   const input = document.getElementById('injectAmountInput');
-  const val   = parseFloat(input?.value) || 0;
+  const val = parseFloat(input?.value) || 0;
   if (val < 0.01) { showToast('最少注入 0.01 BNB'); return; }
-
   const c = courtData.live.find(x => x.id === caseId);
   if (!c) return;
-
   const thr = TIER_THRESHOLDS[c.tier || 'fast'];
-  const maxInject  = thr?.maxInjectBnb || 0.5;
-  const injected   = c.injectedBnb || 0;
-  const remaining  = maxInject - injected;
-  if (val > remaining) { showToast(`最多还可注入 ${remaining.toFixed(3)} BNB`); return; }
+  const remaining = (thr?.maxInjectBnb||0.5) - (c.injectedBnb||0);
+  if (val > remaining + 0.0001) { showToast(`最多还可注入 ${remaining.toFixed(3)} BNB`); return; }
 
   const btn = document.getElementById('injectConfirmBtn');
   btn.textContent = '⏳ 等待 MetaMask 确认…';
-  btn.style.opacity = '.7';
-  btn.style.pointerEvents = 'none';
+  btn.style.opacity = '.7'; btn.style.pointerEvents = 'none';
 
-  // MetaMask 真实签名（发送 BNB 到合约地址）
   if (walletConnected && window.ethereum) {
     try {
       const valWei = '0x' + Math.round(val * 1e18).toString(16);
-      await window.ethereum.request({
-        method: 'eth_sendTransaction',
-        params: [{ from: walletAddress, to: MEME_COURT_ADDRESS, value: valWei }]
-      });
+      await window.ethereum.request({ method:'eth_sendTransaction',
+        params:[{ from:walletAddress, to:MEME_COURT_ADDRESS, value:valWei }] });
     } catch(e) {
       if (e.code === 4001) {
         showToast('用户取消了注入');
         btn.textContent = '🦊 MetaMask 确认注入';
-        btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+        btn.style.opacity='1'; btn.style.pointerEvents='auto';
         return;
       }
-      // 非用户取消的错误继续走模拟流程（测试网可能失败）
     }
   }
 
-  // 更新案件数据
   const hours = Math.floor(val / BNB_PER_HOUR);
-  c.injectedBnb = (c.injectedBnb || 0) + val;
-  c.bnbPool     = (c.bnbPool || 0) + val;
+  c.injectedBnb = (c.injectedBnb||0) + val;
+  c.bnbPool     = (c.bnbPool||0) + val;
   if (c.endTime) c.endTime += hours * 3600000;
   c.timer = c.endTime ? formatCountdown(c.endTime) : c.timer;
-
   document.getElementById('injectBnbOverlay').style.display = 'none';
   renderCourtCards();
-  saveLiveCases();
-  showToast(`✅ 已注入 ${val.toFixed(3)} BNB · 开庭延长 ${hours} 小时 · 奖池 +${val.toFixed(3)} BNB`);
+  saveLiveCases && saveLiveCases();
+  showToast(`✅ 已注入 ${val.toFixed(3)} BNB · 延长 ${hours} 小时 · 奖池 +${val.toFixed(3)} BNB`);
 }
 
 /* ══════════════════════════════════════════════════
