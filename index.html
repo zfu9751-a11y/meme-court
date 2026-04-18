@@ -1279,7 +1279,7 @@ textarea::placeholder{color:var(--text3)}
 .court-stat-lbl{font-size:11px;color:var(--text3)}
 
 /* Tab 栏 */
-.court-tabs{display:flex;align-items:center;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border)}
+.court-tabs{display:flex;align-items:center;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)}
 .court-tab{padding:10px 20px;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border:none;background:none;font-family:var(--sans);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;display:flex;align-items:center;gap:6px}
 .court-tab:hover{color:var(--text)}
 .court-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -1288,6 +1288,35 @@ textarea::placeholder{color:var(--text3)}
 .court-tabs-right{margin-left:auto;padding-bottom:10px}
 .court-launch-btn{display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:all .15s}
 .court-launch-btn:hover{opacity:.88;transform:translateY(-1px)}
+
+/* 开庭广场筛选 pills */
+.court-filter-bar{display:flex;align-items:center;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.court-filter-pill{padding:5px 14px;border-radius:99px;border:1.5px solid var(--border);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;background:var(--white);font-family:var(--sans);transition:all .15s}
+.court-filter-pill:hover{border-color:var(--border2);color:var(--text)}
+.court-filter-pill.active{background:var(--text);border-color:var(--text);color:#fff}
+.court-filter-pill.active.f-live{background:var(--red);border-color:var(--red)}
+.court-filter-pill.active.f-pending{background:var(--amber);border-color:var(--amber)}
+.court-filter-pill.active.f-fast{background:#0891b2;border-color:#0891b2}
+.court-filter-pill.active.f-standard{background:var(--blue);border-color:var(--blue)}
+.court-filter-pill.active.f-deep{background:#7c3aed;border-color:#7c3aed}
+
+/* 候审进度条 */
+.cc-pending-progress{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.cc-pending-progress-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.cc-pending-progress-title{font-size:10px;font-weight:700;color:var(--text3)}
+.cc-pending-progress-pct{font-size:10px;font-weight:700;font-family:var(--mono)}
+.cc-pending-progress-track{height:5px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:4px}
+.cc-pending-progress-fill{height:100%;border-radius:99px;transition:width .6s}
+.cc-pending-progress-hint{font-size:10px;color:var(--text3)}
+
+/* 分组标题 */
+.court-group-label{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:6px 0;margin-bottom:-4px}
+.court-group-label-text{font-size:12px;font-weight:700;color:var(--text2);white-space:nowrap}
+.court-group-label-line{flex:1;height:1px;background:var(--border)}
+
+/* Demo 结算按钮 */
+.cc-demo-settle{width:100%;margin-top:8px;padding:7px;background:linear-gradient(90deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:opacity .15s;letter-spacing:.02em}
+.cc-demo-settle:hover{opacity:.88}
 
 /* 开庭卡片网格 */
 .court-cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -2002,18 +2031,28 @@ textarea::placeholder{color:var(--text3)}
 
     <!-- Tab 栏 -->
     <div class="court-tabs" style="margin-top:20px">
-      <button class="court-tab active" id="courtTab-live" onclick="switchCourtTab('live')">
-        🔴 进行中 <span class="court-tab-count">3</span>
+      <button class="court-tab active" id="courtTab-all" onclick="switchCourtTab('all')">
+        全部 <span class="court-tab-count" id="courtTabCount-all">0</span>
+      </button>
+      <button class="court-tab" id="courtTab-live" onclick="switchCourtTab('live')">
+        🔴 进行中 <span class="court-tab-count" id="courtTabCount-live">0</span>
       </button>
       <button class="court-tab" id="courtTab-pending" onclick="switchCourtTab('pending')">
-        ⏳ 候审中 <span class="court-tab-count">7</span>
-      </button>
-      <button class="court-tab" id="courtTab-closed" onclick="switchCourtTab('closed')">
-        ✅ 已结案 <span class="court-tab-count">12</span>
+        ⏳ 候审 <span class="court-tab-count" id="courtTabCount-pending">0</span>
       </button>
       <div class="court-tabs-right">
         <button class="court-launch-btn" onclick="openApplyModal()">🏛️ 申请开庭</button>
       </div>
+    </div>
+
+    <!-- 档位筛选 pills -->
+    <div class="court-filter-bar" id="courtFilterBar">
+      <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:2px">档位：</span>
+      <button class="court-filter-pill active" id="courtFilter-all" onclick="switchCourtFilter('all',this)">全部档位</button>
+      <button class="court-filter-pill" id="courtFilter-fast" onclick="switchCourtFilter('fast',this)">⚡ 快审</button>
+      <button class="court-filter-pill" id="courtFilter-standard" onclick="switchCourtFilter('standard',this)">📋 标准</button>
+      <button class="court-filter-pill" id="courtFilter-deep" onclick="switchCourtFilter('deep',this)">🔬 深审</button>
+      <span style="margin-left:auto;font-size:11px;color:var(--text3)" id="courtFilterCount"></span>
     </div>
 
     <!-- 卡片网格 -->
@@ -5618,6 +5657,14 @@ function animateCount(el,from,to,duration){
 const BITQUERY_KEY = 'ory_at_Zg7U3I37Gfxp4D38IZEIZFKtBP9nxrJ0NcPGhLbWkZA.aAWGRoXlhg4RohesnuyJcTp71AgeYBCf7owMx5OA8bY';
 const FOURMEME_CONTRACT = '0x5c952063c7fc8610FFDB798152D69F0B9550762b';
 
+/* ── 自动档位分类 ── */
+function autoTier(capUsd, holders, change24h) {
+  const t = classifyTier(capUsd, holders, change24h);
+  if (t === 'deep')     return { tier:'deep',     tierLabel:'深审', tierCls:'cc-tier-deep' };
+  if (t === 'standard') return { tier:'standard', tierLabel:'标准', tierCls:'cc-tier-standard' };
+  return { tier:'fast', tierLabel:'快审', tierCls:'cc-tier-fast' };
+}
+
 // 币种图标映射
 function guessIcon(name, symbol) {
   const s = (symbol || name || '').toLowerCase();
@@ -5678,7 +5725,7 @@ async function fetchFourMemeTokens() {
         name: t.shortName || t.name?.slice(0, 12) || '???',
         fullName: t.name,
         source: `four.meme · ${timeAgo(launchTime.toISOString())}`,
-        tier: 'fast', tierLabel: '快审', tierCls: 'cc-tier-fast',
+        ...autoTier(parseFloat(t.cap || 0), parseInt(t.hold || 0), parseFloat(t.day1Increase || 0) * 100),
         timer: '候审中', urgent: false,
         betUp: 0, betDown: 0,
         pool: Math.floor(vol * 0.01),
@@ -5696,15 +5743,30 @@ async function fetchFourMemeTokens() {
       };
     });
 
-    // 如果当前在候审 tab，刷新渲染
-    if (currentCourtTab === 'pending') renderCourtCards();
+    // 自动升档：达到开庭标准的案件直接进 live
+    const toPromote = [];
+    courtData.pending = courtData.pending.filter(c => {
+      const capN = parseFloat(c.cap?.replace(/[^0-9.]/g,'') || 0);
+      const holdN = parseInt(c.holders) || 0;
+      const chgN = Math.abs(parseFloat(c.change) || 0);
+      const tier = classifyTier(capN, holdN, chgN);
+      if (!tier) return true; // 未达标，留候审
+      // 检查是否已在 live
+      const alreadyLive = courtData.live.some(x => x.id === c.id || x.contract === c.contract);
+      if (alreadyLive) return false;
+      const tierInfo = autoTier(capN, holdN, chgN);
+      c.tier = tierInfo.tier; c.tierLabel = tierInfo.tierLabel; c.tierCls = tierInfo.tierCls;
+      toPromote.push(c);
+      return false; // 从 pending 移除
+    });
+    toPromote.forEach(c => {
+      courtData.live.unshift(c);
+      recordOpenPrice(c); // 记录开庭价格
+    });
 
-    // 同步更新 Tab 数量
-    const pendingTab = document.getElementById('courtTab-pending');
-    if (pendingTab) {
-      const countEl = pendingTab.querySelector('.court-tab-count');
-      if (countEl) countEl.textContent = courtData.pending.length;
-    }
+    // 刷新广场
+    renderCourtCards();
+    updateCourtTabCounts();
 
     // 同步更新 Meme 雷达行情表
     fetchFourMemeTableDataV2(tokens);
@@ -5789,6 +5851,9 @@ const courtData = {
       liq:'$48K', holders:'312', change:'+127%', changeUp:true, whale:'🐳买入',
       initiator:'项目方',
       isDemo: true,
+      contract: null, // Demo 案件无合约，使用模拟价格
+      openPrice: 0.00048, // 开庭时记录的模拟价格
+      endTime: Date.now() + 24 * 3600 * 1000, // 24小时后结算
     },
   ],
   pending: [
@@ -5890,133 +5955,261 @@ const courtData = {
   ],
 };
 
-let currentCourtTab = 'live';
+let currentCourtTab = 'all';
+let currentCourtFilter = 'all'; // 档位筛选：all / fast / standard / deep
+
+/* ══ 档位临界标准 ══ */
+const TIER_THRESHOLDS = {
+  fast:     { minCapUsd: 1000,    maxCapUsd: 100000,  minHolders: 0,    minChange: 20,  duration: 24 * 3600000 },
+  standard: { minCapUsd: 100000,  maxCapUsd: 1000000, minHolders: 300,  minChange: 0,   duration: 72 * 3600000 },
+  deep:     { minCapUsd: 1000000, maxCapUsd: Infinity, minHolders: 2000, minChange: 0,   duration: 7  * 24 * 3600000 },
+};
+
+function classifyTier(cap, holders, change24h) {
+  const capN = parseFloat(cap) || 0;
+  const holdN = parseInt(holders) || 0;
+  const chgN  = parseFloat(change24h) || 0;
+  if (capN >= 1000000 && holdN >= 2000) return 'deep';
+  if (capN >= 100000 && holdN >= 300)   return 'standard';
+  if (capN >= 1000 || chgN >= 20)       return 'fast';
+  return null; // 未达标，留候审
+}
 
 function switchCourtTab(tab) {
   currentCourtTab = tab;
   document.querySelectorAll('.court-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('courtTab-' + tab).classList.add('active');
+  const el = document.getElementById('courtTab-' + tab);
+  if (el) el.classList.add('active');
+  renderCourtCards();
+}
+
+function switchCourtFilter(filter, btn) {
+  currentCourtFilter = filter;
+  document.querySelectorAll('.court-filter-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
   renderCourtCards();
 }
 
 // 动态更新所有 Tab 数量
 function updateCourtTabCounts() {
-  const liveTab = document.getElementById('courtTab-live');
-  const pendingTab = document.getElementById('courtTab-pending');
-  const closedTab = document.getElementById('courtTab-closed');
-  if (liveTab) liveTab.querySelector('.court-tab-count').textContent = courtData.live.length;
-  if (pendingTab) pendingTab.querySelector('.court-tab-count').textContent = courtData.pending.length;
-  if (closedTab) closedTab.querySelector('.court-tab-count').textContent = courtData.closed.length;
+  const total = courtData.live.length + courtData.pending.length;
+  const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  setCount('courtTabCount-all',     total);
+  setCount('courtTabCount-live',    courtData.live.length);
+  setCount('courtTabCount-pending', courtData.pending.length);
 }
 
+/* ── 候审进度条计算 ── */
+function calcPendingProgress(c) {
+  const capN   = parseFloat((c.cap || c.liq || '0').replace(/[^0-9.]/g, '')) || 0;
+  const holdN  = parseInt(c.holders) || 0;
+  const chgN   = Math.abs(parseFloat(c.change) || 0);
+  const tier   = c.tier || 'fast';
+  const thr    = TIER_THRESHOLDS[tier];
+  if (!thr) return { pct: 0, hint: '—', color: '#d97706' };
+
+  // 进度 = max(市值进度, 涨幅进度, 持仓进度)
+  const capPct  = thr.minCapUsd > 0  ? Math.min(100, (capN  / thr.minCapUsd) * 100) : 0;
+  const chgPct  = thr.minChange > 0  ? Math.min(100, (chgN  / thr.minChange) * 100) : 0;
+  const holdPct = thr.minHolders > 0 ? Math.min(100, (holdN / thr.minHolders)* 100) : 0;
+  const pct = Math.round(Math.max(capPct, chgPct, holdPct));
+
+  const left = thr.minCapUsd - capN;
+  const hint = pct >= 100
+    ? '✅ 达标，等待 AI 开庭'
+    : left > 0
+      ? `还差 $${left >= 1000 ? (left/1000).toFixed(0)+'K' : left.toFixed(0)} 市值开庭`
+      : `已达涨幅/持仓标准，等待 AI 确认`;
+
+  const color = pct >= 80 ? '#16a34a' : pct >= 50 ? '#d97706' : '#6b6b68';
+  return { pct, hint, color };
+}
+
+/* ── 格式化倒计时 ── */
+function formatCountdown(endTime) {
+  const diff = endTime - Date.now();
+  if (diff <= 0) return '⏰ 已到期';
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h >= 24) return `${Math.floor(h/24)}天${h%24}h`;
+  if (h > 0)   return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+/* ══ renderCourtCards 完整重写 ══ */
 function renderCourtCards() {
   const grid = document.getElementById('courtCardsGrid');
   if (!grid) return;
   updateCourtTabCounts();
-  const data = courtData[currentCourtTab] || [];
-  if (!data.length) {
+
+  // 根据 Tab 过滤数据源
+  let liveData    = [...courtData.live];
+  let pendingData = [...courtData.pending];
+
+  if (currentCourtTab === 'live')    pendingData = [];
+  if (currentCourtTab === 'pending') liveData    = [];
+
+  // 档位筛选
+  if (currentCourtFilter !== 'all') {
+    liveData    = liveData.filter(c => c.tier === currentCourtFilter);
+    pendingData = pendingData.filter(c => c.tier === currentCourtFilter);
+  }
+
+  const totalShown = liveData.length + pendingData.length;
+  const countEl = document.getElementById('courtFilterCount');
+  if (countEl) countEl.textContent = `共 ${totalShown} 个案件`;
+
+  if (!totalShown) {
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text3);font-size:14px">暂无案件</div>`;
     return;
   }
 
-  // 候审中加真实数据说明
-  let headerHtml = '';
-  if (currentCourtTab === 'pending') {
-    headerHtml = `<div style="grid-column:1/-1;margin-bottom:4px;padding:8px 12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.15);border-radius:10px;display:flex;align-items:center;gap:8px">
-      <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>
-      <span style="font-size:11px;color:var(--text2)">⚡ <strong>真实数据</strong> · 自动拉取 four.meme 最新上线 Meme 币 · 每 5 分钟刷新 · 所有候审案件均为 BSC 链上真实交易数据</span>
-    </div>`;
-  }
-  grid.innerHTML = headerHtml + data.map(c => {
-    const statusCls = currentCourtTab === 'live' ? 'status-live' : currentCourtTab === 'pending' ? 'status-pending' : 'status-closed';
-    const statusBadge = currentCourtTab === 'live'
-      ? `<span class="cc-status cc-status-live"><span class="live-dot"></span>开庭中</span>`
-      : currentCourtTab === 'pending'
-      ? `<span class="cc-status cc-status-pending">⏳ 候审中</span>`
-      : `<span class="cc-status cc-status-closed">✅ 已结案</span>`;
-    const joinBtn = currentCourtTab === 'closed'
-      ? `<button class="cc-join-btn closed" onclick="event.stopPropagation();openVerdictModal('${c.id}')">查看裁定</button>`
-      : currentCourtTab === 'pending'
-      ? `<button class="cc-join-btn" style="background:var(--amber);opacity:.8;cursor:default">等待开庭</button>`
-      : `<button class="cc-join-btn" onclick="event.stopPropagation();openCourtDetail('${c.id}')">参与开庭</button>`;
+  let html = '';
 
-    // 进行中：评委测试标注
-    const demoTag = (currentCourtTab === 'live' && c.isDemo)
-      ? `<div style="grid-column:1/-1;margin-bottom:4px;padding:8px 12px;background:linear-gradient(90deg,rgba(255,99,64,0.1),rgba(255,99,64,0.03));border:1px solid rgba(255,99,64,0.3);border-radius:10px;display:flex;align-items:center;gap:8px">
+  // ── 进行中分组 ──
+  if (liveData.length) {
+    if (currentCourtTab === 'all') {
+      html += `<div class="court-group-label">
+        <span class="court-group-label-text">🔴 进行中 · ${liveData.length} 个</span>
+        <div class="court-group-label-line"></div>
+      </div>`;
+    }
+
+    liveData.forEach(c => {
+      // Demo 快捷结算标注
+      const demoTag = c.isDemo ? `<div style="grid-column:1/-1;margin-bottom:4px;padding:8px 12px;background:linear-gradient(90deg,rgba(255,99,64,0.1),rgba(255,99,64,0.03));border:1px solid rgba(255,99,64,0.3);border-radius:10px;display:flex;align-items:center;gap:8px">
           <span style="width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 1s infinite;display:inline-block;flex-shrink:0"></span>
           <span style="font-size:12px;font-weight:700;color:var(--accent)">⚡ 评委测试案件</span>
-          <span style="font-size:11px;color:var(--text2)">此案件专为走通完整押注流程设计：连接钱包 → 押注 → MetaMask 签名 → BSCScan 验证</span>
+          <span style="font-size:11px;color:var(--text2)">完整押注流程：连接钱包 → 押注 → MetaMask 签名 → BSCScan 验证</span>
         </div>` : '';
 
-    const cardOnclick = currentCourtTab === 'closed'
-      ? `openVerdictModal('${c.id}')`
-      : `openCourtDetail('${c.id}')`;
+      const timerDisplay = c.endTime ? formatCountdown(c.endTime) : c.timer;
+      const isUrgent = c.endTime ? (c.endTime - Date.now()) < 2 * 3600000 : c.urgent;
 
-    return demoTag + `
-    <div class="court-card ${statusCls}" onclick="${cardOnclick}">
-      <div class="cc-top">
-        <div class="cc-header">
-          <div class="cc-coin">
-            <div class="cc-icon">${c.iconImg ? `<img src="${c.iconImg}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentElement.textContent='${c.icon}'">` : c.icon}</div>
-            <div>
-              <div class="cc-name">${c.name}</div>
-              <div class="cc-source">${c.source}</div>
+      html += demoTag + `
+      <div class="court-card status-live" onclick="openCourtDetail('${c.id}')">
+        <div class="cc-top">
+          <div class="cc-header">
+            <div class="cc-coin">
+              <div class="cc-icon">${c.iconImg ? `<img src="${c.iconImg}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentElement.textContent='${c.icon}'">` : c.icon}</div>
+              <div>
+                <div class="cc-name">${c.name}</div>
+                <div class="cc-source">${c.source}</div>
+              </div>
+            </div>
+            <div class="cc-status-wrap">
+              <span class="cc-status cc-status-live"><span class="live-dot"></span>开庭中</span>
+              <span class="cc-tier-badge ${c.tierCls}">${c.tierLabel}</span>
+              ${c.aiVerdict?.risk === '高风险' || c.aiVerdict?.risk === '极高风险' ? `<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca">⚠️ ${c.aiVerdict.risk}</span>` : ''}
+              <span class="cc-timer ${isUrgent ? 'urgent' : ''}">${timerDisplay}</span>
             </div>
           </div>
-          <div class="cc-status-wrap">
-            ${statusBadge}
-            <span class="cc-tier-badge ${c.tierCls}">${c.tierLabel}</span>
-            ${c.aiVerdict?.risk === '高风险' || c.aiVerdict?.risk === '极高风险' ? `<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca">⚠️ ${c.aiVerdict.risk}</span>` : ''}
-            <span class="cc-timer ${c.urgent?'urgent':''}">${c.timer}</span>
+          <div class="cc-bet-bar-wrap">
+            <div class="cc-bet-labels">
+              <span class="cc-bet-up">📈 看涨 ${c.betUp}%</span>
+              <span class="cc-bet-down">📉 看跌 ${c.betDown}%</span>
+            </div>
+            <div class="cc-bet-bar">
+              <div class="cc-bet-fill" style="width:${c.betUp}%"></div>
+            </div>
           </div>
         </div>
-        ${currentCourtTab !== 'pending' ? `
-        <div class="cc-bet-bar-wrap">
-          <div class="cc-bet-labels">
-            <span class="cc-bet-up">📈 看涨 ${c.betUp}%</span>
-            <span class="cc-bet-down">📉 看跌 ${c.betDown}%</span>
-          </div>
-          <div class="cc-bet-bar">
-            <div class="cc-bet-fill" style="width:${c.betUp}%"></div>
-          </div>
-        </div>` : `<div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 0">开庭后可参与押注</div>`}
-      </div>
-      <div class="cc-mid">
-        <div class="cc-metrics">
-          <div class="cc-metric">
-            <div class="cc-metric-val">${c.liq}</div>
-            <div class="cc-metric-lbl">流动性</div>
-          </div>
-          <div class="cc-metric">
-            <div class="cc-metric-val ${c.changeUp?'up':'down'}">${c.change}</div>
-            <div class="cc-metric-lbl">涨跌幅</div>
-          </div>
-          <div class="cc-metric">
-            <div class="cc-metric-val">${c.whale}</div>
-            <div class="cc-metric-lbl">巨鲸动向</div>
+        <div class="cc-mid">
+          <div class="cc-metrics">
+            <div class="cc-metric"><div class="cc-metric-val">${c.liq}</div><div class="cc-metric-lbl">流动性</div></div>
+            <div class="cc-metric"><div class="cc-metric-val ${c.changeUp?'up':'down'}">${c.change}</div><div class="cc-metric-lbl">涨跌幅</div></div>
+            <div class="cc-metric"><div class="cc-metric-val">${c.whale}</div><div class="cc-metric-lbl">巨鲸动向</div></div>
           </div>
         </div>
-      </div>
-      ${c.verdict ? `
-      <div class="cc-verdict-result">
-        <span class="cc-verdict-label">⚖️ AI 裁定：${c.verdict}</span>
-        <span class="cc-verdict-val ${c.verdictCls}">${c.verdictResult}</span>
-      </div>` : ''}
-      <div class="cc-bottom">
-        <div class="cc-pool">
-          <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:6px">
-            <span>${(c.pool * 0.7 / 320).toFixed(3)} BNB</span>
-            <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+        <div class="cc-bottom">
+          <div class="cc-pool">
+            <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:6px">
+              <span>${(c.pool * 0.7 / 320).toFixed(3)} BNB</span>
+              <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+            </div>
+            <div class="cc-pool-lbl">奖池 · ${c.initiator}</div>
           </div>
-          <div class="cc-pool-lbl">奖池 · ${c.initiator}</div>
+          <div class="cc-bottom-right">
+            <span class="cc-participants">${c.participants > 0 ? c.participants + '人参与' : '等待中'}</span>
+            <button class="cc-join-btn" onclick="event.stopPropagation();openCourtDetail('${c.id}')">参与开庭</button>
+          </div>
         </div>
-        <div class="cc-bottom-right">
-          <span class="cc-participants">${c.participants > 0 ? c.participants + '人参与' : '等待中'}</span>
-          ${joinBtn}
-        </div>
-      </div>
+        ${c.isDemo ? `<button class="cc-demo-settle" onclick="event.stopPropagation();openDemoSettle('${c.id}')">⚡ 快捷结算（Demo）</button>` : ''}
+      </div>`;
+    });
+  }
+
+  // ── 候审分组 ──
+  if (pendingData.length) {
+    if (currentCourtTab === 'all') {
+      html += `<div class="court-group-label" style="margin-top:${liveData.length ? '12px' : '0'}">
+        <span class="court-group-label-text">⏳ 候审中 · ${pendingData.length} 个</span>
+        <div class="court-group-label-line"></div>
+      </div>`;
+    }
+
+    // 真实数据说明条
+    html += `<div style="grid-column:1/-1;margin-bottom:4px;padding:8px 12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.15);border-radius:10px;display:flex;align-items:center;gap:8px">
+      <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>
+      <span style="font-size:11px;color:var(--text2)">⚡ <strong>真实数据</strong> · 自动拉取 four.meme 最新 Meme 币 · 每 5 分钟刷新</span>
     </div>`;
-  }).join('');
+
+    pendingData.forEach(c => {
+      const prog = calcPendingProgress(c);
+
+      html += `
+      <div class="court-card status-pending" onclick="openCourtDetail('${c.id}')">
+        <div class="cc-top">
+          <div class="cc-header">
+            <div class="cc-coin">
+              <div class="cc-icon">${c.iconImg ? `<img src="${c.iconImg}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentElement.textContent='${c.icon}'">` : c.icon}</div>
+              <div>
+                <div class="cc-name">${c.name}</div>
+                <div class="cc-source">${c.source}</div>
+              </div>
+            </div>
+            <div class="cc-status-wrap">
+              <span class="cc-status cc-status-pending">⏳ 候审中</span>
+              <span class="cc-tier-badge ${c.tierCls}">${c.tierLabel}</span>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);text-align:center;padding:4px 0">开庭后可参与押注</div>
+        </div>
+        <div class="cc-mid">
+          <div class="cc-metrics">
+            <div class="cc-metric"><div class="cc-metric-val">${c.liq}</div><div class="cc-metric-lbl">流动性</div></div>
+            <div class="cc-metric"><div class="cc-metric-val ${c.changeUp?'up':'down'}">${c.change}</div><div class="cc-metric-lbl">涨跌幅</div></div>
+            <div class="cc-metric"><div class="cc-metric-val">${c.holders}</div><div class="cc-metric-lbl">持仓地址</div></div>
+          </div>
+        </div>
+        <div class="cc-pending-progress">
+          <div class="cc-pending-progress-label">
+            <span class="cc-pending-progress-title">📡 距开庭进度</span>
+            <span class="cc-pending-progress-pct" style="color:${prog.color}">${prog.pct}%</span>
+          </div>
+          <div class="cc-pending-progress-track">
+            <div class="cc-pending-progress-fill" style="width:${prog.pct}%;background:${prog.color}"></div>
+          </div>
+          <div class="cc-pending-progress-hint">${prog.hint}</div>
+        </div>
+        <div class="cc-bottom">
+          <div class="cc-pool">
+            <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:6px">
+              <span>${(c.pool * 0.7 / 320).toFixed(3)} BNB</span>
+              <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+            </div>
+            <div class="cc-pool-lbl">奖池 · ${c.initiator}</div>
+          </div>
+          <div class="cc-bottom-right">
+            <span class="cc-participants">等待开庭</span>
+            <button class="cc-join-btn" style="background:var(--amber);opacity:.85;cursor:default">等待开庭</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  grid.innerHTML = html;
 }
 
 function openCourtDetail(id) {
@@ -8615,6 +8808,275 @@ setInterval(updateCd,60000);
 setInterval(updateBetDeadline,1000);
 // 检查 MetaMask 是否已授权
 checkExistingConnection();
+
+/* ══════════════════════════════════════════════════
+   结算闭环系统
+══════════════════════════════════════════════════ */
+
+/* ── 拉 four.meme 当前价格 ── */
+async function fetchFourMemePrice(contractAddr) {
+  if (!contractAddr) return null;
+  try {
+    const res = await fetch('https://four.meme/meme-api/v1/public/token/info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokenAddress: contractAddr })
+    });
+    const data = await res.json();
+    const price = parseFloat(data?.data?.price || 0);
+    return price > 0 ? price : null;
+  } catch(e) {
+    // 降级：用 DexScreener
+    try {
+      const r2 = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
+      const d2 = await r2.json();
+      const pair = d2?.pairs?.find(p => p.chainId === 'bsc') || d2?.pairs?.[0];
+      const p = parseFloat(pair?.priceUsd || 0);
+      return p > 0 ? p : null;
+    } catch(e2) { return null; }
+  }
+}
+
+/* ── 案件开庭时记录 openPrice + endTime ── */
+async function recordOpenPrice(caseObj) {
+  if (caseObj.openPrice) return; // 已记录过
+  const tier = caseObj.tier || 'fast';
+  const duration = (tier === 'deep') ? 7*24*3600000 : (tier === 'standard') ? 72*3600000 : 24*3600000;
+  caseObj.endTime = Date.now() + duration;
+  if (caseObj.contract) {
+    const price = await fetchFourMemePrice(caseObj.contract);
+    caseObj.openPrice = price || 100; // 无法获取时用占位值
+  } else {
+    caseObj.openPrice = 100;
+  }
+  caseObj.timer = formatCountdown(caseObj.endTime);
+  renderCourtCards();
+  saveLiveCases();
+  console.log(`✅ ${caseObj.name} openPrice=${caseObj.openPrice} endTime=${new Date(caseObj.endTime).toLocaleString()}`);
+}
+
+/* ── 把 live cases 持久化到 localStorage（方案B）── */
+function saveLiveCases() {
+  try {
+    const toSave = courtData.live.map(c => ({
+      ...c, _saved: true
+    }));
+    localStorage.setItem('mc_live_cases_v2', JSON.stringify(toSave));
+  } catch(e) {}
+}
+
+function loadLiveCases() {
+  try {
+    const raw = localStorage.getItem('mc_live_cases_v2');
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    const existingIds = new Set(courtData.live.map(c => c.id));
+    saved.forEach(c => { if (!existingIds.has(c.id)) courtData.live.unshift(c); });
+  } catch(e) {}
+}
+
+/* ── 方案B：页面加载时批量检查过期案件 ── */
+async function checkExpiredCases() {
+  const now = Date.now();
+  const expired = courtData.live.filter(c => c.endTime && c.endTime <= now);
+  if (!expired.length) return;
+  console.log(`🔔 检测到 ${expired.length} 个过期案件，开始结算…`);
+  for (const c of expired) {
+    await settleCaseAuto(c);
+  }
+  if (expired.length) { renderCourtCards(); updateCourtTabCounts(); }
+}
+
+/* ── 自动结算一个案件 ── */
+async function settleCaseAuto(c) {
+  // 拉当前价格
+  let closePrice = null;
+  if (c.contract) closePrice = await fetchFourMemePrice(c.contract);
+  if (!closePrice) closePrice = c.openPrice || 100; // 降级：无法拉价格时价格不变（平局处理）
+
+  const openP  = c.openPrice || closePrice;
+  const isUp   = closePrice >= openP;
+  const change = openP > 0 ? ((closePrice - openP) / openP * 100).toFixed(1) : '0';
+
+  doSettle(c, isUp ? 'up' : 'down', closePrice, `${isUp ? '+' : ''}${change}%（开庭 $${openP?.toPrecision(4)} → 结算 $${closePrice?.toPrecision(4)}）`);
+}
+
+/* ── 核心结算逻辑（自动 & Demo 共用）── */
+function doSettle(c, winDir, closePrice, priceNote) {
+  // 构建 verdict
+  const verdictMap = { up: { verdict:'持有', verdictCls:'vr-hold', verdictResult:'✅ 看涨方向胜出', color:'#16a34a' },
+                       down:{ verdict:'等待', verdictCls:'vr-wait', verdictResult:'📉 看跌方向胜出', color:'#dc2626' } };
+  const v = verdictMap[winDir];
+
+  c.verdict       = v.verdict;
+  c.verdictCls    = v.verdictCls;
+  c.verdictResult = v.verdictResult;
+  c.timer         = '已结案';
+  c.confidence    = c.aiVerdict?.confidence || 75;
+  c.risk          = c.aiVerdict?.risk || '中风险';
+  c.closePrice    = closePrice;
+  c.verdictShort  = `开庭价 $${(c.openPrice||0).toPrecision(4)}，结算价 $${closePrice?.toPrecision(4)}。
+${priceNote}
+${winDir === 'up' ? '价格上涨，看涨方胜出。' : '价格下跌，看跌方胜出。'}
+${c.aiVerdict?.short?.split('\n').pop() || '本庭裁定已记录。'}`;
+  c.source = c.source?.replace('四.meme', 'four.meme').replace('候审中', '已结案') + ' · 已结案';
+
+  // 从 live 移到 closed
+  courtData.live    = courtData.live.filter(x => x.id !== c.id);
+  courtData.closed.unshift(c);
+
+  // 更新押注记录
+  settleUserBets(c, winDir);
+
+  // 更新 UI
+  renderCourtCards();
+  updateCourtTabCounts();
+  saveLiveCases();
+  renderProfilePage && renderProfilePage();
+  showToast(`⚖️ ${c.name} 已结案：${v.verdictResult}`);
+}
+
+/* ── 更新押注记录 + 写收益流水 ── */
+function settleUserBets(c, winDir) {
+  try {
+    const key = 'memecourt_bets_' + (walletAddress || 'anon');
+    const records = JSON.parse(localStorage.getItem(key) || '[]');
+    let anyWin = false;
+    records.forEach(r => {
+      if (r.caseId !== c.id || r.status !== 'pending') return;
+      const won = (winDir === 'up' && r.dir === 'up') || (winDir === 'down' && r.dir === 'down');
+      r.status = won ? 'win' : 'lose';
+      if (won) {
+        // 赔率：AI 裁定加成（沿用 updateBpOdds 逻辑）
+        const mult = winDir === 'up' ? (c._upMult || 2.0) : (c._downMult || 2.0);
+        r.reward = Math.floor(r.amt * mult);
+        anyWin = true;
+        // 写收益流水
+        saveGavelHistory({
+          type: 'win', positive: true,
+          icon: '🏆',
+          title: `押注获胜 · ${c.name} ${c.verdictResult}`,
+          sub: `押注 ${r.amt} $GAVEL · ${winDir === 'up' ? '看涨' : '看跌'} · ${new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'})}`,
+          amount: `+${r.reward.toLocaleString()}`,
+          rawAmount: r.reward,
+          date: new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}),
+          caseId: c.id,
+          claimable: true,
+        });
+      } else {
+        saveGavelHistory({
+          type: 'lose', positive: false,
+          icon: '💸',
+          title: `押注失败 · ${c.name} ${c.verdictResult}`,
+          sub: `押注 ${r.amt} $GAVEL · ${winDir === 'up' ? '看涨' : '看跌'} 方向押错`,
+          amount: `-${r.amt.toLocaleString()}`,
+          rawAmount: r.amt,
+          date: new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}),
+          caseId: c.id,
+          claimable: false,
+        });
+      }
+    });
+    localStorage.setItem(key, JSON.stringify(records));
+    if (anyWin) renderProfilePage && renderProfilePage();
+  } catch(e) { console.warn('settleUserBets error', e); }
+}
+
+/* ══ Demo 快捷结算弹窗 ══ */
+let _demoSettleCaseId = null;
+
+function openDemoSettle(caseId) {
+  _demoSettleCaseId = caseId;
+  const c = courtData.live.find(x => x.id === caseId);
+  if (!c) return;
+
+  // 创建弹窗（如果不存在）
+  let overlay = document.getElementById('demoSettleOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'demoSettleOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)';
+    overlay.onclick = e => { if(e.target===overlay) overlay.style.display='none'; };
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:20px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.3);animation:modal-in .25s cubic-bezier(.34,1.2,.64,1) forwards">
+        <div style="background:linear-gradient(135deg,#7c3aed,#4f46e5);padding:20px 24px 16px">
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);letter-spacing:.08em;margin-bottom:6px">⚡ DEMO 快捷结算</div>
+          <div id="demoSettleName" style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-.02em"></div>
+          <div id="demoSettleInfo" style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:4px"></div>
+        </div>
+        <div style="padding:20px 24px">
+          <div style="font-size:12px;font-weight:700;color:#6b6b68;margin-bottom:12px">选择结算结果：</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button onclick="executeDemoSettle('up')" style="padding:13px 16px;background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;cursor:pointer;font-size:13px;font-weight:700;color:#16a34a;font-family:inherit;text-align:left;transition:all .15s" onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+              📈 看涨方胜出 <span style="float:right;font-size:11px;font-weight:500;color:#86efac">价格上涨 → 押涨者得奖励</span>
+            </button>
+            <button onclick="executeDemoSettle('down')" style="padding:13px 16px;background:#fef2f2;border:2px solid #dc2626;border-radius:12px;cursor:pointer;font-size:13px;font-weight:700;color:#dc2626;font-family:inherit;text-align:left;transition:all .15s" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fef2f2'">
+              📉 看跌方胜出 <span style="float:right;font-size:11px;font-weight:500;color:#fca5a5">价格下跌 → 押跌者得奖励</span>
+            </button>
+            <button onclick="executeDemoSettle('zero')" style="padding:13px 16px;background:#fff7ed;border:2px solid #f97316;border-radius:12px;cursor:pointer;font-size:13px;font-weight:700;color:#f97316;font-family:inherit;text-align:left;transition:all .15s" onmouseover="this.style.background='#ffedd5'" onmouseout="this.style.background='#fff7ed'">
+              💀 代币归零 <span style="float:right;font-size:11px;font-weight:500;color:#fdba74">Rug Pull → 看跌方胜出</span>
+            </button>
+          </div>
+          <button onclick="document.getElementById('demoSettleOverlay').style.display='none'" style="margin-top:14px;width:100%;padding:11px;background:#f5f4f0;border:1.5px solid #e8e8e4;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#6b6b68;font-family:inherit">取消</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+
+  document.getElementById('demoSettleName').textContent = c.icon + ' ' + c.name;
+  document.getElementById('demoSettleInfo').textContent = `${c.id} · ${c.tierLabel} · 奖池 ${c.pool.toLocaleString()} $GAVEL`;
+  overlay.style.display = 'flex';
+}
+
+async function executeDemoSettle(result) {
+  document.getElementById('demoSettleOverlay').style.display = 'none';
+  const c = courtData.live.find(x => x.id === _demoSettleCaseId);
+  if (!c) return;
+
+  // 结算前先拉价格（即使是 Demo 也尝试拉真实价格）
+  let closePrice = null;
+  if (c.contract) closePrice = await fetchFourMemePrice(c.contract);
+
+  const winDir = (result === 'up') ? 'up' : 'down'; // zero 也算 down（跌归零）
+
+  if (result === 'zero') {
+    closePrice = 0;
+    doSettle(c, 'down', 0, '代币归零（Rug Pull）');
+  } else {
+    const note = result === 'up'
+      ? `价格上涨 ${closePrice ? '真实价格 $' + closePrice.toPrecision(4) : '（Demo 模拟）'}`
+      : `价格下跌 ${closePrice ? '真实价格 $' + closePrice.toPrecision(4) : '（Demo 模拟）'}`;
+    doSettle(c, winDir, closePrice || c.openPrice || 100, note);
+  }
+}
+
+/* ── 每秒更新进行中案件的倒计时显示 ── */
+function updateLiveTimers() {
+  courtData.live.forEach(c => {
+    if (!c.endTime) return;
+    c.timer = formatCountdown(c.endTime);
+    // 检查是否刚刚过期
+    if (c.endTime <= Date.now() && !c._settling) {
+      c._settling = true;
+      settleCaseAuto(c);
+    }
+  });
+  // 只刷新 timer 文字，不重建 DOM
+  document.querySelectorAll('.cc-timer[data-cid]').forEach(el => {
+    const c = courtData.live.find(x => x.id === el.dataset.cid);
+    if (c) el.textContent = c.timer;
+  });
+}
+
+// ── 页面加载时执行 ──
+loadLiveCases();
+// 给所有 live 案件补充 openPrice（如果还没有）
+courtData.live.forEach(c => { if (c.contract && !c.openPrice) recordOpenPrice(c); });
+// 批量检查过期案件（方案B）
+checkExpiredCases();
+// 每秒更新倒计时
+setInterval(updateLiveTimers, 1000);
+
 </script>
 <!-- ══ 移动端 ══ -->
 <style>
@@ -8946,9 +9408,9 @@ checkExistingConnection();
     <!-- 开庭广场页 -->
     <div class="m-page" id="mPageCourt">
       <div class="m-court-header">
-        <div class="m-court-tab active" id="mTab-pending" onclick="mSwitchCourtTab('pending')">候审中 <span id="mTabCount-pending">6</span></div>
-        <div class="m-court-tab" id="mTab-live" onclick="mSwitchCourtTab('live')">进行中 <span id="mTabCount-live">1</span></div>
-        <div class="m-court-tab" id="mTab-closed" onclick="mSwitchCourtTab('closed')">已结案 <span id="mTabCount-closed">6</span></div>
+        <div class="m-court-tab active" id="mTab-all" onclick="mSwitchCourtTab('all')">全部 <span id="mTabCount-all">0</span></div>
+        <div class="m-court-tab" id="mTab-live" onclick="mSwitchCourtTab('live')">进行中 <span id="mTabCount-live">0</span></div>
+        <div class="m-court-tab" id="mTab-pending" onclick="mSwitchCourtTab('pending')">候审 <span id="mTabCount-pending">0</span></div>
         <button class="m-court-apply-btn" onclick="openApplyModal()" title="申请开庭">🏛️</button>
       </div>
       <div class="m-court-list" id="mCourtList"></div>
@@ -9213,7 +9675,7 @@ async function mSubmitBet() {
 }
 
 let mCurrentTab = 'chat';
-let mCurrentCourtTab = 'pending';
+let mCurrentCourtTab = 'all';
 let mChatHistory = [];
 
 // 页面切换
@@ -9351,48 +9813,43 @@ function mRenderCourtList() {
   if (!list) return;
 
   // 更新数量
-  document.getElementById('mTabCount-live').textContent = courtData.live.length;
-  document.getElementById('mTabCount-pending').textContent = courtData.pending.length;
-  document.getElementById('mTabCount-closed').textContent = courtData.closed.length;
+  const total = courtData.live.length + courtData.pending.length;
+  const setC = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  setC('mTabCount-all', total);
+  setC('mTabCount-live', courtData.live.length);
+  setC('mTabCount-pending', courtData.pending.length);
 
-  const data = courtData[mCurrentCourtTab] || [];
+  // 按 tab 过滤
+  let liveData    = mCurrentCourtTab === 'pending' ? [] : [...courtData.live];
+  let pendingData = mCurrentCourtTab === 'live'    ? [] : [...courtData.pending];
 
-  let html = '';
+  const allData = [...liveData, ...pendingData];
 
-  // 候审中加真实数据说明
-  if (mCurrentCourtTab === 'pending') {
-    html += `<div class="m-real-data-tip">
-      <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>
-      ⚡ 真实数据 · 自动拉取 four.meme 最新 Meme 币 · 每 5 分钟刷新
-    </div>`;
-  }
-
-  if (!data.length) {
-    list.innerHTML = html + `<div style="text-align:center;padding:60px 16px;color:#a8a8a4;font-size:13px">暂无案件</div>`;
+  if (!allData.length) {
+    list.innerHTML = `<div style="text-align:center;padding:60px 16px;color:#a8a8a4;font-size:13px">暂无案件</div>`;
     return;
   }
 
-  html += data.map(c => {
-    const isLive = mCurrentCourtTab === 'live';
-    const isPending = mCurrentCourtTab === 'pending';
-    const isClosed = mCurrentCourtTab === 'closed';
-    const bnbPool = (c.pool * 0.7 / 320).toFixed(3);
+  let html = `<div class="m-real-data-tip">
+    <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>
+    ⚡ 真实数据 · 自动拉取 four.meme · 每 5 分钟刷新
+  </div>`;
 
-    const btnHtml = isClosed
-      ? `<button class="m-court-bet-btn closed" onclick="event.stopPropagation();mOpenDetail('${c.id}')">查看裁定</button>`
-      : isPending
+  html += allData.map(c => {
+    const isLive    = courtData.live.includes(c);
+    const isPending = courtData.pending.includes(c);
+    const bnbPool   = (c.pool * 0.7 / 320).toFixed(3);
+    const timerDisplay = c.endTime ? formatCountdown(c.endTime) : c.timer;
+
+    const btnHtml = isPending
       ? `<button class="m-court-bet-btn pending">等待开庭</button>`
       : `<button class="m-court-bet-btn" onclick="event.stopPropagation();mOpenDetail('${c.id}')">押注</button>`;
 
     const timerHtml = isLive
-      ? `<span class="m-court-timer${c.urgent?' urgent':''}">${c.timer}</span>`
-      : isClosed
-      ? `<span style="font-size:10px;color:#a8a8a4">已结案</span>`
+      ? `<span class="m-court-timer${c.urgent?' urgent':''}">${timerDisplay}</span>`
       : `<span style="font-size:10px;color:#a8a8a4">候审中</span>`;
 
-    const onclick = isClosed ? `mOpenDetail('${c.id}')` : `mOpenDetail('${c.id}')`;
-
-    return `<div class="m-court-item" onclick="${onclick}">
+    return `<div class="m-court-item" onclick="mOpenDetail('${c.id}')">
       <div class="m-court-icon">${c.iconImg ? `<img src="${c.iconImg}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentElement.textContent='${c.icon}'">` : c.icon}</div>
       <div class="m-court-info">
         <div class="m-court-name">
