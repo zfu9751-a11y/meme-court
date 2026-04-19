@@ -93,10 +93,10 @@ meme-court/
 | 合约 | 地址 |
 | --- | --- |
 | GavelToken | `0x5f9D91603accD8aA5a3ef73F611e229C463dd702` |
-| MemeCourtV1 | `0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906` |
+| MemeCourtV1 | `0xE633Bc168C83CB7877741aA087a0Eb23d49713Be` |
 
 - [GavelToken on BSCScan](https://testnet.bscscan.com/address/0x5f9D91603accD8aA5a3ef73F611e229C463dd702)
-- [MemeCourtV1 on BSCScan](https://testnet.bscscan.com/address/0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906)
+- [MemeCourtV1 on BSCScan](https://testnet.bscscan.com/address/0xE633Bc168C83CB7877741aA087a0Eb23d49713Be)
 
 ---
 
