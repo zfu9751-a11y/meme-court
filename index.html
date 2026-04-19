@@ -6113,9 +6113,10 @@ function renderCourtCards() {
         </div>
         <div class="cc-bottom">
           <div class="cc-pool">
-            <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:6px">
-              <span style="color:${(c.bnbPool||0)>0?'var(--green)':'var(--text3)'}">${(c.bnbPool||0)>0?(c.bnbPool).toFixed(3)+' BNB':'0 BNB'}</span>
-              <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+            <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:5px">
+              <span style="color:${(c.bnbPool||0)>0?'#f97316':'#c2732b'};font-weight:800;transition:color .2s">${(c.bnbPool||0)>0?(c.bnbPool).toFixed(3)+' BNB':'0 BNB'}</span>
+              <span style="color:var(--text3);font-size:11px;font-weight:700">+</span>
+              <span style="font-size:10px;font-weight:700;color:#16a34a;font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
             </div>
             <div class="cc-pool-lbl">奖池 · ${c.initiator}${(c.injectedBnb||0)>0?' · 已注入 '+(c.injectedBnb).toFixed(3)+' BNB':''}</div>
           </div>
@@ -6179,9 +6180,10 @@ function renderCourtCards() {
         </div>
         <div class="cc-bottom">
           <div class="cc-pool">
-            <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:6px">
-              <span style="color:var(--text3)">0 BNB</span>
-              <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+            <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:5px">
+              <span style="color:#c2732b;font-weight:800">0 BNB</span>
+              <span style="color:var(--text3);font-size:11px;font-weight:700">+</span>
+              <span style="font-size:10px;font-weight:700;color:#16a34a;font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
             </div>
             <div class="cc-pool-lbl">平台代币奖池 · ${c.initiator}</div>
           </div>
