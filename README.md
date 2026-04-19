@@ -1,9 +1,11 @@
 # ⚖️ Meme Court · 链上 Meme 势力裁决所
 
-**BNB Chain 上的 AI 法官 + 社区押注平台** — 始终围绕 four.meme 生态打造
+**BNB Chain 上的 AI 法官 + 社区押注平台** 
 
 🌐 **Live Demo**: https://zfu9751-a11y.github.io/meme-court/
+
 🐦 **Twitter**: [@MemeCourt_BNB](https://twitter.com/MemeCourt_BNB)
+
 🏆 **four.meme AI Sprint 2026**
 
 ---
