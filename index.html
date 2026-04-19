@@ -4469,7 +4469,30 @@ async function copySlapCard() {
 /* ── 钱包状态 ── */
 /* ══ 合约配置 ══ */
 const GAVEL_TOKEN_ADDRESS = '0x5f9D91603accD8aA5a3ef73F611e229C463dd702';
-const MEME_COURT_ADDRESS  = '0x9F0081A3E98f30F3B8e1B43FA965F590f23b5906';
+const MEME_COURT_ADDRESS  = '0xE633Bc168C83CB7877741aA087a0Eb23d49713Be';
+
+// 官方基础奖池参数（与合约一致）
+const GAVEL_SEED = {
+  fast:     { init: 100,  growPerHour: 100,   cap: 500   },  // 快审
+  standard: { init: 500,  growPerHour: 187.5, cap: 5000  },  // 标准
+  deep:     { init: 2000, growPerHour: 119,   cap: 10000 },  // 深审
+};
+
+// 计算当前应显示的官方底池（视觉动态值，含小数）
+function calcGavelSeedDisplay(tier, openTime) {
+  const cfg = GAVEL_SEED[tier] || GAVEL_SEED.fast;
+  if (!openTime) return cfg.init;
+  const hoursElapsed = (Date.now() - openTime) / 3600000;
+  const accrued = cfg.init + cfg.growPerHour * hoursElapsed;
+  return Math.min(accrued, cfg.cap);
+}
+
+// 计算结算时需要补注的 $GAVEL 差额（链上已注入 initSeed，现在需要补到 accrued）
+function calcSeedTopUp(tier, openTime, alreadySeeded) {
+  const total = calcGavelSeedDisplay(tier, openTime);
+  const diff  = Math.floor(total) - (alreadySeeded || GAVEL_SEED[tier]?.init || 100);
+  return Math.max(0, diff);
+}
 const BSC_TESTNET_CHAIN_ID = '0x61'; // 97
 
 const GAVEL_ABI = [
@@ -4487,7 +4510,7 @@ const COURT_ABI = [
   'function claimBNB(string)',
   'function claimGavel(string)',
   'function claimNewbie()',
-  'function getCase(string) view returns (tuple(address creator,uint8 tier,uint256 bnbPool,uint256 gavelPool,uint256 upBNB,uint256 downBNB,uint256 upGavel,uint256 downGavel,uint8 status,uint8 result,uint256 createdAt,uint256 settledAt))',
+  'function getCase(string) view returns (tuple(address creator,uint8 tier,uint256 bnbPool,uint256 gavelPool,uint256 gavelSeedPaid,uint256 upBNB,uint256 downBNB,uint256 upGavel,uint256 downGavel,uint8 status,uint8 result,uint256 createdAt,uint256 settledAt))',
   'function getBet(string,address) view returns (tuple(uint256 bnbAmount,uint256 gavelAmount,uint8 direction,bool bnbClaimed,bool gavelClaimed))',
   'function newbieClaimed(address) view returns (bool)',
   'function tierMinFee(uint256) view returns (uint256)',
@@ -5330,6 +5353,33 @@ function encodeBetWithGavel(caseId, direction, amountWei) {
   return '0x' + sel + strOffset + dirHex + amtHex + strData;
 }
 
+// seedGavelPool(string,uint256) — 平台注入基础奖池
+function encodeSeedGavelPool(caseId, amountGavel) {
+  const sel = 'b4e3a0b4'; // keccak256("seedGavelPool(string,uint256)") 前4字节
+  // ABI: string at offset 0x40, uint256, then string data
+  const strOffset = '0000000000000000000000000000000000000000000000000000000000000040';
+  const amtWei    = BigInt(Math.floor(amountGavel * 1e18));
+  const amtHex    = amtWei.toString(16).padStart(64,'0');
+  const strData   = encodeStringParam(caseId);
+  return '0x' + sel + strOffset + amtHex + strData;
+}
+
+// 调用 seedGavelPool：Owner 钱包注入基础 $GAVEL 奖池
+async function callSeedGavelPool(caseId, amountGavel) {
+  if (!walletConnected || !window.ethereum) return null;
+  try {
+    const data = encodeSeedGavelPool(caseId, amountGavel);
+    const tx = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{ from: walletAddress, to: MEME_COURT_ADDRESS, data, gas: '0x30D40' }]
+    });
+    return tx;
+  } catch(e) {
+    console.warn('seedGavelPool failed:', e);
+    return null;
+  }
+}
+
 function closeBetModal(e) { if (e.target === document.getElementById('betOverlay')) closeBetDirect(); }
 function closeBetDirect() { document.getElementById('betOverlay').classList.remove('open'); }
 
@@ -5770,8 +5820,17 @@ async function fetchFourMemeTokens() {
       return false;
     });
     toPromote.forEach(c => {
+      c.openTime       = Date.now();
+      c.gavelSeedInit  = GAVEL_SEED[c.tier]?.init || 100;
+      c.gavelSeedPaid  = c.gavelSeedInit;
       courtData.live.unshift(c);
       recordOpenPrice(c);
+      // 平台自动注入初始底池（Owner 钱包签名）
+      if (walletConnected) {
+        callSeedGavelPool(c.id, c.gavelSeedInit).then(tx => {
+          if (tx) console.log(`💰 seedGavelPool ${c.name}: ${c.gavelSeedInit} $GAVEL tx=${tx}`);
+        });
+      }
     });
     if (toPromote.length) console.log(`🚀 ${toPromote.length} 个案件自动升入进行中`);
 
@@ -6116,7 +6175,7 @@ function renderCourtCards() {
             <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:5px">
               <span style="color:${(c.bnbPool||0)>0?'#f97316':'#c2732b'};font-weight:800;transition:color .2s">${(c.bnbPool||0)>0?(c.bnbPool).toFixed(3)+' BNB':'0 BNB'}</span>
               <span style="color:var(--text3);font-size:11px;font-weight:700">+</span>
-              <span style="font-size:10px;font-weight:700;color:#16a34a;font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+              <span class="cc-gavel-pool" data-id="${c.id}" style="font-size:10px;font-weight:700;color:#16a34a;font-family:var(--mono)">${Math.floor(calcGavelSeedDisplay(c.tier, c.openTime) + (c.upGavel||0) + (c.downGavel||0)).toLocaleString()} $GAVEL</span>
             </div>
             <div class="cc-pool-lbl">奖池 · ${c.initiator}${(c.injectedBnb||0)>0?' · 已注入 '+(c.injectedBnb).toFixed(3)+' BNB':''}</div>
           </div>
@@ -6183,7 +6242,7 @@ function renderCourtCards() {
             <div class="cc-pool-val" style="display:flex;align-items:baseline;gap:5px">
               <span style="color:#c2732b;font-weight:800">0 BNB</span>
               <span style="color:var(--text3);font-size:11px;font-weight:700">+</span>
-              <span style="font-size:10px;font-weight:700;color:#16a34a;font-family:var(--mono)">${c.pool.toLocaleString()} $GAVEL</span>
+              <span style="font-size:10px;font-weight:700;color:#16a34a;font-family:var(--mono)">${(GAVEL_SEED[c.tier]?.init||100).toLocaleString()} $GAVEL</span>
             </div>
             <div class="cc-pool-lbl">平台代币奖池 · ${c.initiator}</div>
           </div>
@@ -8993,9 +9052,23 @@ async function settleCaseAuto(c) {
   let closePrice = null;
   if (c.contract) closePrice = await fetchFourMemePrice(c.contract);
   if (!closePrice) closePrice = c.openPrice || 1;
-  const openP = c.openPrice || closePrice;
-  const isUp  = closePrice >= openP;
+  const openP  = c.openPrice || closePrice;
+  const isUp   = closePrice >= openP;
   const change = openP > 0 ? ((closePrice-openP)/openP*100).toFixed(1) : '0';
+
+  // 结算前补足累积 $GAVEL 底池差额
+  if (walletConnected && c.openTime) {
+    const accrued = Math.floor(calcGavelSeedDisplay(c.tier, c.openTime));
+    const paid    = c.gavelSeedPaid || (GAVEL_SEED[c.tier]?.init || 100);
+    const topUp   = Math.max(0, accrued - paid);
+    if (topUp > 0) {
+      try {
+        const tx = await callSeedGavelPool(c.id, topUp);
+        if (tx) { c.gavelSeedPaid = accrued; console.log(`💰 结算补注 ${topUp} $GAVEL for ${c.name}`); }
+      } catch(e) { console.warn('topup failed:', e); }
+    }
+  }
+
   doSettle(c, isUp?'up':'down', closePrice, `${isUp?'+':''}${change}%（开庭 $${openP?.toPrecision(4)} → 结算 $${closePrice?.toPrecision(4)}）`);
 }
 
@@ -9063,6 +9136,14 @@ function updateLiveTimers() {
       c._settling = true;
       settleCaseAuto(c);
       needRender = true;
+    }
+    // 实时更新官方 $GAVEL 底池显示（动态增长效果）
+    if (c.openTime) {
+      const gavelDisplay = Math.floor(
+        calcGavelSeedDisplay(c.tier, c.openTime) + (c.upGavel||0) + (c.downGavel||0)
+      );
+      const el = document.querySelector(`.cc-gavel-pool[data-id="${c.id}"]`);
+      if (el) el.textContent = gavelDisplay.toLocaleString() + ' $GAVEL';
     }
   });
 }
