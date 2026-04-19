@@ -6538,11 +6538,18 @@ function spawnDanmaku(bf, dir, isBig, text) {
   const el = document.createElement('div');
   const msgs = mockDanmakus[dir];
   const msg = text || msgs[Math.floor(Math.random() * msgs.length)];
-  el.className = `court-danmaku-item cdi-${dir}${isBig?' cdi-big':''}`;
+  el.className = `court-danmaku-item cdi-${dir}${isBig?' cdi-big':''}${isSelf?' cdi-self':''}`;
   el.textContent = msg;
+  if (isSelf) {
+    el.style.border = '1.5px solid ' + (dir==='up' ? '#4ade80' : '#f87171');
+    el.style.background = dir==='up' ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.18)';
+    el.style.color = dir==='up' ? '#4ade80' : '#f87171';
+    el.style.fontWeight = '800';
+    el.style.boxShadow = '0 0 8px ' + (dir==='up' ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)');
+  }
   const topPct = 10 + Math.random() * 75;
   el.style.top = topPct + '%';
-  const duration = 4 + Math.random() * 3;
+  const duration = 10 + Math.random() * 6;
   if (dir === 'up') {
     el.style.left = '0';
     el.style.animation = `fly-right ${duration}s linear forwards`;
@@ -6561,7 +6568,7 @@ function sendPreset(text, dir) {
   if (!detailDanmakuDir) { showToast('请先完成押注才能发送弹幕'); return; }
   if (dir !== detailDanmakuDir) { showToast(`你押注了${detailDanmakuDir==='up'?'看涨':'看跌'}，只能发${detailDanmakuDir==='up'?'绿色':'红色'}弹幕`); return; }
   const bf = document.getElementById('danmakuBattlefield');
-  if (bf) spawnDanmaku(bf, dir, true, text);
+  if (bf) spawnDanmaku(bf, dir, true, text, true);
 }
 
 function sendDanmaku(dir) {
@@ -6571,7 +6578,7 @@ function sendDanmaku(dir) {
   if (!detailDanmakuDir) { showToast('请先完成押注才能发送弹幕'); return; }
   if (dir !== detailDanmakuDir) { showToast(`你押注了${detailDanmakuDir==='up'?'看涨':'看跌'}，只能发对应方向的弹幕`); return; }
   const bf = document.getElementById('danmakuBattlefield');
-  if (bf) spawnDanmaku(bf, dir, true, text);
+  if (bf) spawnDanmaku(bf, dir, true, text, true);
   input.value = '';
 }
 
@@ -7691,7 +7698,7 @@ function renderHotCourtCards() {
   const cardHtml = hotCourtCards.map(c => `
     <div class="hc-card" onclick="openCourtDetail('${c.id}')">
       <div class="hc-top">
-        <div class="hc-icon">${c.icon}</div>
+        <div class="hc-icon">${c.iconImg?`<img src="${c.iconImg}" style="width:24px;height:24px;object-fit:cover;border-radius:6px" onerror="this.parentElement.textContent='${c.icon}'">`:c.icon}</div>
         <div style="flex:1;min-width:0">
           <div class="hc-name">${c.name}</div>
           <div class="hc-time">${c.time}</div>
@@ -7727,7 +7734,12 @@ async function openJurorCard(c, dir, amt, txHash) {
   const estBnb = (ratio * parseFloat(bnbPool) * 0.8).toFixed(4);
   const estGavel = Math.floor(ratio * c.pool * 0.8);
   document.getElementById('jcCase').textContent = c.id;
-  document.getElementById('jcName').textContent = c.icon + ' ' + c.name;
+  const jcNameEl = document.getElementById('jcName');
+  if (c.iconImg) {
+    jcNameEl.innerHTML = `<img src="${c.iconImg}" style="width:18px;height:18px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:4px" onerror="this.remove()"> ${c.name}`;
+  } else {
+    jcNameEl.textContent = c.icon + ' ' + c.name;
+  }
   document.getElementById('jcDir').textContent = dir==='up' ? '📈 我押注看涨 · 押注金额 ' + amt + ' $GAVEL' : '📉 我押注看跌 · 押注金额 ' + amt + ' $GAVEL';
   document.getElementById('jcBnbReward').textContent = '+' + estBnb + ' BNB';
   document.getElementById('jcGavelReward').textContent = '+' + estGavel.toLocaleString() + ' $GAVEL';
@@ -8690,7 +8702,12 @@ function initKpiSparklines() {
 async function triggerAISidePanel(key) {
   const c = COIN_POOL[key];
   if (!c) return;
-  document.getElementById('aiSideCoinIcon').textContent = c.icon || '⚖️';
+  const aiIconEl = document.getElementById('aiSideCoinIcon');
+  if (c.iconImg) {
+    aiIconEl.innerHTML = `<img src="${c.iconImg}" style="width:20px;height:20px;object-fit:cover;border-radius:5px;vertical-align:middle" onerror="this.parentElement.textContent='${c.icon||'⚖️'}'">`;
+  } else {
+    aiIconEl.textContent = c.icon || '⚖️';
+  }
   document.getElementById('aiSideCoinName').textContent = c.name;
   document.getElementById('aiSideVerdictBadge').innerHTML = '';
   document.getElementById('aiSideMetrics').innerHTML = '';
@@ -8822,7 +8839,7 @@ function openInjectModal(caseId) {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:20px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.25);animation:modal-in .25s cubic-bezier(.34,1.2,.64,1) forwards">
       <div style="background:linear-gradient(135deg,#064e3b,#065f46);padding:20px 24px 16px">
-        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);letter-spacing:.08em;margin-bottom:6px">💉 注入 BNB · ${c.icon} ${c.name}</div>
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);letter-spacing:.08em;margin-bottom:6px">💉 注入 BNB · ${c.iconImg?`<img src="${c.iconImg}" style="width:14px;height:14px;object-fit:cover;border-radius:3px;vertical-align:middle">`:c.icon} ${c.name}</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.7)">每注入 <strong style="color:#4ade80">0.01 BNB</strong> 延长开庭 <strong style="color:#4ade80">1 小时</strong>，全部进入奖池</div>
       </div>
       <div style="padding:14px 24px;border-bottom:1px solid #f0fdf4;background:#f0fdf4;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
@@ -9542,7 +9559,12 @@ function mOpenDetail(id) {
   const isLive = courtData.live.includes(c);
   const isClosed = courtData.closed.includes(c);
 
-  document.getElementById('mDetailName').textContent = c.icon + ' ' + c.name;
+  const mDetailNameEl = document.getElementById('mDetailName');
+  if (c.iconImg) {
+    mDetailNameEl.innerHTML = `<img src="${c.iconImg}" style="width:18px;height:18px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:4px" onerror="this.remove()"> ${c.name}`;
+  } else {
+    mDetailNameEl.textContent = c.icon + ' ' + c.name;
+  }
   document.getElementById('mDetailId').textContent = c.id + ' · ' + c.tierLabel;
   const statusEl = document.getElementById('mDetailStatus');
   if (isLive) { statusEl.textContent = '● 开庭中'; statusEl.style.cssText = 'font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;background:#fef2f2;color:#dc2626'; }
