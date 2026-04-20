@@ -10374,13 +10374,10 @@ async function settleDemoCase() {
 
   showToast('⏳ 结算中，拉取实时价格...');
 
-  // 拉取真实 closePrice
+  // 拉取真实 closePrice（优先 four.meme 官方，fallback DexScreener）
   let closePrice = 0;
   try {
-    const res  = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${c.contract}`);
-    const data = await res.json();
-    const pair = data?.pairs?.[0];
-    closePrice = parseFloat(pair?.priceUsd || 0);
+    closePrice = await fetchFourMemePrice(c.contract) || 0;
   } catch(e) {}
 
   const openPrice = _demoOpenPrice || parseFloat(c.price?.replace('$','')) || 0;
