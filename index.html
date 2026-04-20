@@ -10211,8 +10211,8 @@ let demoTimer = null;
 let _demoOpenPrice = 0;
 
 function initDemoCase() {
-  // 从候审队列取第一个真实案件
-  const src = courtData.pending && courtData.pending[0];
+  // 从候审队列取第一个有 contract 地址的真实案件
+  const src = courtData.pending && courtData.pending.find(c => c.contract);
   if (!src) {
     // 如果候审队列空，创建一个占位案件
     courtData.demo = [{
