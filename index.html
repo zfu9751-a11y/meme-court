@@ -5231,6 +5231,7 @@ function showSuccess(caseNo, txHash) {
     initiator: selectedIdentity === 'project' ? '项目方' : '散户发起',
     contract,
     isNew: true,
+    onChain: true, // 手动申请开庭，有 createCase 链上记录
   };
 
   // 插入进行中列表头部
@@ -5336,13 +5337,14 @@ async function submitBet() {
   btn.textContent = '⏳ 等待授权…';
   btn.disabled = true;
 
-  // caseId：用 betCoin.name 对应的链上案件 ID
-  const caseId = betCoin.caseId || ('CASE-' + betCoin.name.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8));
-  const dirCode = betDirection === 'up' ? 1 : 0; // 合约：1=BULLISH, 0=BEARISH
-  const amtWei = BigInt(amt) * BigInt('1000000000000000000'); // 18 decimals
+  // 根据 onChain 判断用哪个合约函数
+  const _useOpenBet = !betCoin.onChain && !!betCoin.contract && betCoin.contract.startsWith('0x');
+  const caseId  = betCoin.caseId || betCoin.id || ('CASE-' + betCoin.name.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8));
+  const dirCode = betDirection === 'up' ? 1 : 0;
+  const amtWei  = BigInt(amt) * BigInt('1000000000000000000');
 
   try {
-    // ── Step 1：approve GAVEL token ──
+    // ── Step 1：approve ──
     const approveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
     showToast('Step 1/2：授权 $GAVEL 额度…');
     const approveTx = await callContract(GAVEL_TOKEN_ADDRESS, approveData);
@@ -5351,16 +5353,14 @@ async function submitBet() {
       btn.disabled = false;
       return;
     }
-    // 等 approve 确认（简单等待）
     await new Promise(r => setTimeout(r, 2000));
 
-    // ── Step 2：betWithGavel(string caseId, uint8 direction, uint256 amount) ──
+    // ── Step 2：押注 ──
     btn.textContent = '⏳ 链上押注中…';
     showToast('Step 2/2：链上押注…');
-    // demo 用 openBet(tokenAddress)，普通案件用 betWithGavel(caseId)
-    const betData = _isDemoFlow && _demoToken
-      ? encodeOpenBet(_demoToken, dirCode, amtWei)
-      : encodeBetWithGavel(caseId, dirCode, amtWei);
+    const betData = _useOpenBet
+      ? encodeOpenBet(betCoin.contract, dirCode, amtWei)   // 自动拉取案件
+      : encodeBetWithGavel(caseId, dirCode, amtWei);        // 手动申请案件
     const betTx = await callContract(MEME_COURT_ADDRESS, betData);
     if (!betTx) {
       btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌';
@@ -5944,6 +5944,7 @@ async function fetchFourMemeTokens() {
       c.openTime       = Date.now();
       c.gavelSeedInit  = GAVEL_SEED[c.tier]?.init || 100;
       c.gavelSeedPaid  = c.gavelSeedInit;
+      c.onChain        = false; // 自动拉取，无 createCase
       courtData.live.unshift(c);
       recordOpenPrice(c);
       // 平台自动注入初始底池（Owner 钱包签名）
@@ -6043,6 +6044,7 @@ const courtData = {
       initiator:'项目方',
       openPrice: 0.00048,
       endTime: Date.now() + 3 * 3600 * 1000,
+      onChain: false, contract: null,
     },
   ],
   pending: [
@@ -6812,8 +6814,13 @@ function updateDetailReward() {
 
 async function submitDetailBet() {
   // demo 模式：用 openBet 直接押注 tokenAddress
-  const _isDemoFlow = !!(currentDetailCase && currentDetailCase._isDemo);
-  const _demoToken  = _isDemoFlow ? currentDetailCase.contract : null;
+  const _isDemoFlow  = !!(currentDetailCase && currentDetailCase._isDemo);
+  const _demoCase    = _isDemoFlow ? (courtData.demo && courtData.demo[0]) : null;
+  const _demoToken   = _demoCase ? (_demoCase.contract || currentDetailCase.contract || null) : null;
+  const _useOpenBet  = _isDemoFlow
+    ? !!_demoToken
+    : (!currentDetailCase.onChain && !!currentDetailCase.contract && currentDetailCase.contract.startsWith('0x'));
+  const _betToken    = _isDemoFlow ? _demoToken : currentDetailCase.contract;
 
   if (!walletConnected) { showToast('请先连接钱包'); return; }
   const amt = parseInt(document.getElementById('bpAmountInput').value) || 0;
@@ -6846,7 +6853,10 @@ async function submitDetailBet() {
     // Step 2: betWithGavel
     btn.textContent = '⏳ 链上押注中…';
     showToast('Step 2/2：链上押注…');
-    const betData = encodeBetWithGavel(caseId, dirCode, amtWei);
+    // 自动拉取案件 → openBet(tokenAddress)，手动申请 → betWithGavel(caseId)
+    const betData = _useOpenBet
+      ? encodeOpenBet(_betToken, dirCode, amtWei)
+      : encodeBetWithGavel(caseId, dirCode, amtWei);
     const betTx = await callContract(MEME_COURT_ADDRESS, betData);
     if (!betTx) {
       btn.textContent = '确认押注'; btn.disabled = false; return;
@@ -9185,7 +9195,12 @@ function loadLiveCases() {
     if (!raw) return;
     const saved = JSON.parse(raw);
     const existingIds = new Set(courtData.live.map(c => c.id));
-    saved.forEach(c => { if (!existingIds.has(c.id)) courtData.live.unshift(c); });
+    saved.forEach(c => {
+      if (!existingIds.has(c.id)) {
+        if (c.onChain === undefined) c.onChain = false; // 기존 저장 데이터 호환
+        courtData.live.unshift(c);
+      }
+    });
   } catch(e) {}
 }
 
@@ -9216,6 +9231,31 @@ async function settleCaseAuto(c) {
         if (tx) { c.gavelSeedPaid = accrued; console.log(`💰 结算补注 ${topUp} $GAVEL for ${c.name}`); }
       } catch(e) { console.warn('topup failed:', e); }
     }
+  }
+
+  // 链上结算：自动拉取 → settleOpen(tokenAddress)，手动申请 → settle(caseId)
+  if (walletConnected) {
+    try {
+      if (!c.onChain && c.contract && c.contract.startsWith('0x')) {
+        // openBet 路径：settleOpen(address, uint8)
+        const data = encodeSettleOpen(c.contract, isUp ? 1 : 0);
+        const tx = await callContract(MEME_COURT_ADDRESS, data);
+        if (tx) console.log(`✅ settleOpen ${c.name} tx=${tx.slice(0,10)}...`);
+      } else if (c.onChain) {
+        // betWithGavel 路径：settle(string, uint8)
+        const _sBytes = new TextEncoder().encode(c.id);
+        const _sHex   = Array.from(_sBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+        const _sLen   = _sBytes.length.toString(16).padStart(64,'0');
+        const _sPad   = _sHex.padEnd(Math.ceil(_sHex.length/64)*64,'0');
+        const data    = '0x1b2f7438'
+          + '0000000000000000000000000000000000000000000000000000000000000040'
+          + (isUp ? '0000000000000000000000000000000000000000000000000000000000000001'
+                  : '0000000000000000000000000000000000000000000000000000000000000000')
+          + _sLen + _sPad;
+        const tx = await callContract(MEME_COURT_ADDRESS, data);
+        if (tx) console.log(`✅ settle ${c.name} tx=${tx.slice(0,10)}...`);
+      }
+    } catch(e) { console.warn('chain settle failed:', e); }
   }
 
   doSettle(c, isUp?'up':'down', closePrice, `${isUp?'+':''}${change}%（开庭 $${openP?.toPrecision(4)} → 结算 $${closePrice?.toPrecision(4)}）`);
@@ -9932,7 +9972,11 @@ async function mSubmitBet() {
     if (!approveTx) { btn.textContent = mDetailDir==='up'?'📈 押注看涨':'📉 押注看跌'; btn.disabled=false; return; }
     await new Promise(r => setTimeout(r, 2000));
     btn.textContent = '⏳ 链上押注中…';
-    const betTx = await callContract(MEME_COURT_ADDRESS, encodeBetWithGavel(mDetailCase.id, mDetailDir==='up'?1:0, amtWei));
+    const _mUseOpen = !mDetailCase.onChain && !!mDetailCase.contract;
+    const _mBetData = _mUseOpen
+      ? encodeOpenBet(mDetailCase.contract, mDetailDir==='up'?1:0, amtWei)
+      : encodeBetWithGavel(mDetailCase.id, mDetailDir==='up'?1:0, amtWei);
+    const betTx = await callContract(MEME_COURT_ADDRESS, _mBetData);
     if (!betTx) { btn.textContent = mDetailDir==='up'?'📈 押注看涨':'📉 押注看跌'; btn.disabled=false; return; }
     gavelBalance -= amt;
     document.getElementById('mBetBalance').textContent = gavelBalance.toLocaleString();
