@@ -4683,18 +4683,22 @@ async function claimNewbieOnChain() {
 async function createCaseOnChain(caseId, tier, bnbAmount) {
   if (!walletConnected) { showToast('请先连接钱包'); return null; }
   // createCase(string caseId, uint8 tier)
-  // 手动编码：selector + string offset + uint8 + string data
-  const tierHex = tier.toString(16).padStart(64, '0');
+  // 正确 ABI 编码：(string, uint8)
+  // slot0: string offset = 0x40 (两个头部槽之后)
+  // slot1: uint8 tier (padded to 32 bytes)
+  // slot2: string length
+  // slot3+: string data (padded to 32-byte boundary)
   const cidBytes = new TextEncoder().encode(caseId);
-  const cidHex = Array.from(cidBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const cidHex = Array.from(cidBytes).map(b => b.toString(16).padStart(2,'0')).join('');
   const cidLen = cidBytes.length.toString(16).padStart(64, '0');
   const cidPadded = cidHex.padEnd(Math.ceil(cidHex.length / 64) * 64, '0');
-  // string offset = 0x40 (64), tier after string
-  const data = '0x' + 'e942b516' // createCase selector
-    + '0000000000000000000000000000000000000000000000000000000000000040' // string offset
-    + tierHex
-    + cidLen
-    + cidPadded;
+  const tierHex = tier.toString(16).padStart(64, '0');
+  const data = '0x'
+    + '241e3f50'                                                               // selector: createCase(string,uint8)
+    + '0000000000000000000000000000000000000000000000000000000000000040'       // offset of string (= 2 slots * 32 = 64 = 0x40)
+    + tierHex                                                                  // uint8 tier
+    + cidLen                                                                   // string length
+    + cidPadded;                                                               // string data
   const valueWei = '0x' + BigInt(Math.round(bnbAmount * 1e18)).toString(16);
   return await callContract(MEME_COURT_ADDRESS, data, valueWei);
 }
@@ -10341,7 +10345,16 @@ async function settleDemoCase() {
   // 真实调用 settle(caseId, 1) — 看涨方胜
   let settleTx = null;
   try {
-    const settleData = encodeFunctionCall('settle(string,uint8)', [c.id, 1]);
+    // settle(string caseId, uint8 result) — selector: 1b2f7438
+    const _sid = c.id;
+    const _sBytes = new TextEncoder().encode(_sid);
+    const _sHex = Array.from(_sBytes).map(b => b.toString(16).padStart(2,'0')).join('');
+    const _sLen = _sBytes.length.toString(16).padStart(64, '0');
+    const _sPad = _sHex.padEnd(Math.ceil(_sHex.length/64)*64, '0');
+    const settleData = '0x1b2f7438'
+      + '0000000000000000000000000000000000000000000000000000000000000040'
+      + '0000000000000000000000000000000000000000000000000000000000000001' // result=1 (up)
+      + _sLen + _sPad;
     settleTx = await callContract(MEME_COURT_ADDRESS, settleData);
     if (settleTx) {
       showToast('⏳ 等待结算确认...');
