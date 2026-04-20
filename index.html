@@ -5444,9 +5444,10 @@ async function waitForTx(txHash, maxWait = 30000) {
 
 function encodeApprove(spender, amountWei) {
   // approve(address,uint256) selector = 0x095ea7b3
+  // 使用 max uint256 避免 allowance 不足导致 revert
   const sel = '095ea7b3';
   const addr = spender.slice(2).toLowerCase().padStart(64,'0');
-  const amt  = amountWei.toString(16).padStart(64,'0');
+  const amt  = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
   return '0x' + sel + addr + amt;
 }
 
