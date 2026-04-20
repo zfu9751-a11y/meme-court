@@ -2593,6 +2593,17 @@ textarea::placeholder{color:var(--text3)}
           <div id="gavelHistoryList"></div>
         </div>
 
+      <!-- 我的链上押注 -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #ede9e3;overflow:hidden;margin-top:16px">
+        <div style="padding:14px 18px;border-bottom:1px solid #f2f0ec;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;color:#1a1a18">⛓ 我的链上押注</span>
+          <button onclick="loadMyOnChainBets()" style="font-size:10px;padding:3px 10px;border-radius:6px;cursor:pointer;color:#a8a8a4;background:#f7f6f3;border:1px solid #ede9e3;font-family:var(--sans)">刷新</button>
+        </div>
+        <div id="myOnChainBetsList" style="min-height:60px">
+          <div style="padding:28px 20px;text-align:center;color:#c4c4be;font-size:12px">加载中…</div>
+        </div>
+      </div>
+
         <!-- 右侧：GAVEL 等级 + 战绩卡 -->
         <div style="display:flex;flex-direction:column;gap:12px">
 
@@ -4548,6 +4559,7 @@ async function copySlapCard() {
 /* ══ 合约配置 ══ */
 const GAVEL_TOKEN_ADDRESS = '0x5f9D91603accD8aA5a3ef73F611e229C463dd702';
 const MEME_COURT_ADDRESS  = '0xa692C5e7c08F0564e206a8c0F5427a29C2dce857';
+const OWNER_ADDRESS       = '0xB0088d6Eb46c3C15D878b54900ce1d5AEad54bD7'; // 合约 owner，才可自动 seed
 
 // 官方基础奖池参数（与合约一致）
 const GAVEL_SEED = {
@@ -5727,6 +5739,156 @@ function renderProfilePage() {
   // 收益流水
   document.getElementById('historyCount').textContent = gavelHistory.length > 0 ? gavelHistory.length + ' 条' : '暂无';
   renderFlowList('all');
+  loadMyOnChainBets();
+}
+
+/* ══ 链上押注记录 + 领奖 ══ */
+
+// 从链上读取 openCaseTokens 列表，再逐个查 openBet 和 openCase
+async function loadMyOnChainBets() {
+  const el = document.getElementById('myOnChainBetsList');
+  if (!el || !walletConnected || !window.ethereum) return;
+  el.innerHTML = '<div style="padding:28px 20px;text-align:center;color:#c4c4be;font-size:12px">⏳ 读取链上数据…</div>';
+
+  try {
+    // 1. 读 openCaseTokens 数组长度
+    const lenData = '0x' + MEME_COURT_IFACE.encodeFunctionData('getCaseCount',[]).slice(2); // fallback
+    // 直接用 eth_call 读 openCaseTokens 长度：openCaseTokens.length 没有直接函数
+    // 用 getAllCaseIds 类似逻辑，但 openCaseTokens 没有 getter，只能逐个尝试
+    // 改为从合约读取 openCases 的方式：先调 openCaseTokens(index) 逐个读
+    // 合约有 openCaseTokens 是 public address[]，自动生成 openCaseTokens(uint256) getter
+
+    // 读数组长度：没有直接方法，用 try 循环读到 revert 为止（最多50个）
+    const tokens = [];
+    for (let i = 0; i < 50; i++) {
+      const data = '0x' +
+        // openCaseTokens(uint256) selector: keccak("openCaseTokens(uint256)") 用 ethers 算
+        ethers.utils.Interface.getSighash
+          ? new ethers.utils.Interface(["function openCaseTokens(uint256) view returns (address)"])
+              .encodeFunctionData('openCaseTokens', [i]).slice(2)
+          : null;
+      if (!data) break;
+      const res = await readContract(MEME_COURT_ADDRESS, '0x' + data);
+      if (!res || res === '0x' || res === '0x' + '0'.repeat(64)) break;
+      const addr = '0x' + res.slice(-40);
+      if (addr === '0x' + '0'.repeat(40)) break;
+      tokens.push(addr);
+    }
+
+    if (tokens.length === 0) {
+      el.innerHTML = '<div style="padding:28px 20px;text-align:center;color:#c4c4be;font-size:12px">暂无链上开庭记录</div>';
+      return;
+    }
+
+    // 2. 对每个 token，读 openCase 和 openBet(token, myAddr)
+    const openCaseIface = new ethers.utils.Interface([
+      "function getOpenCase(address) view returns (tuple(uint256 upGavel,uint256 downGavel,uint256 gavelPool,bool settled,uint8 result,uint256 createdAt,uint256 settledAt))",
+      "function getOpenBet(address,address) view returns (tuple(uint256 amount,uint8 direction,bool claimed))"
+    ]);
+
+    const rows = [];
+    for (const token of tokens) {
+      const caseData  = openCaseIface.encodeFunctionData('getOpenCase',  [token]);
+      const betData   = openCaseIface.encodeFunctionData('getOpenBet',   [token, walletAddress]);
+      const [caseRes, betRes] = await Promise.all([
+        readContract(MEME_COURT_ADDRESS, caseData),
+        readContract(MEME_COURT_ADDRESS, betData),
+      ]);
+      if (!betRes || betRes === '0x') continue;
+
+      let caseDecoded, betDecoded;
+      try {
+        caseDecoded = openCaseIface.decodeFunctionResult('getOpenCase', caseRes)[0];
+        betDecoded  = openCaseIface.decodeFunctionResult('getOpenBet',  betRes)[0];
+      } catch(e) { continue; }
+
+      const amount = Number(betDecoded.amount) / 1e18;
+      if (amount === 0) continue; // 没押注
+
+      rows.push({ token, caseDecoded, betDecoded, amount });
+    }
+
+    if (rows.length === 0) {
+      el.innerHTML = '<div style="padding:28px 20px;text-align:center;color:#c4c4be;font-size:12px">你还没有链上押注记录</div>';
+      return;
+    }
+
+    // 3. 渲染
+    el.innerHTML = rows.map(({ token, caseDecoded, betDecoded, amount }) => {
+      const settled   = caseDecoded.settled;
+      const result    = Number(caseDecoded.result); // 0=down,1=up
+      const direction = Number(betDecoded.direction); // 0=down,1=up
+      const claimed   = betDecoded.claimed;
+      const dirLabel  = direction === 1 ? '📈 看涨' : '📉 看跌';
+      const shortToken = token.slice(0,6) + '…' + token.slice(-4);
+
+      // 找 courtData 里对应的 token 名称
+      const matchedCase = [...(courtData.live||[]), ...(courtData.closed||[])].find(c => c.contract?.toLowerCase() === token.toLowerCase());
+      const name = matchedCase?.name || shortToken;
+      const icon = matchedCase?.icon || '🪙';
+
+      let statusHtml = '';
+      let claimBtn   = '';
+
+      if (!settled) {
+        statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fffbeb;border:1px solid #fde68a;color:#b45309;font-weight:600">⏳ 审判中</span>';
+      } else {
+        const won = (direction === result);
+        if (won && !claimed) {
+          statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#f0fdf4;border:1px solid #86efac;color:#16a34a;font-weight:600">🏆 胜诉</span>';
+          claimBtn = `<button onclick="claimMyReward('${token}', this)" style="margin-top:8px;width:100%;padding:7px 0;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans)">领取奖励 $GAVEL</button>`;
+        } else if (won && claimed) {
+          statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#f0fdf4;border:1px solid #86efac;color:#16a34a;font-weight:600">✅ 已领奖</span>';
+        } else {
+          statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;font-weight:600">❌ 败诉</span>';
+        }
+      }
+
+      return `<div style="padding:12px 18px;border-bottom:0.5px solid #f7f6f3">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:50%;background:#f7f6f3;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icon}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:#1a1a18">${name}</div>
+            <div style="font-size:10px;color:#a8a8a4;margin-top:1px">${dirLabel} · ${amount.toLocaleString()} $GAVEL</div>
+          </div>
+          <div>${statusHtml}</div>
+        </div>
+        ${claimBtn}
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    el.innerHTML = '<div style="padding:28px 20px;text-align:center;color:#dc2626;font-size:12px">读取失败：' + (e.message||'未知错误') + '</div>';
+  }
+}
+
+// 领取奖励
+async function claimMyReward(tokenAddress, btn) {
+  if (!walletConnected) { showToast('请先连接钱包'); return; }
+  btn.textContent = '⏳ 领取中…'; btn.disabled = true;
+  try {
+    const data = encodeClaimOpenReward(tokenAddress);
+    const tx = await callContract(MEME_COURT_ADDRESS, data);
+    if (tx) {
+      showToast('🎉 奖励已发放！');
+      btn.textContent = '✅ 已领取';
+      // 刷新余额
+      setTimeout(async () => {
+        const bal = await fetchRealGavelBalance(walletAddress);
+        if (bal > 0) {
+          gavelBalance = Math.floor(bal);
+          document.getElementById('gavelBalNum').textContent = gavelBalance.toLocaleString();
+          document.getElementById('profileGavelBal').textContent = gavelBalance.toLocaleString();
+        }
+        loadMyOnChainBets(); // 刷新状态
+      }, 4000);
+    } else {
+      btn.textContent = '领取奖励 $GAVEL'; btn.disabled = false;
+    }
+  } catch(e) {
+    showToast('领取失败：' + (e.message||''));
+    btn.textContent = '领取奖励 $GAVEL'; btn.disabled = false;
+  }
 }
 
 function renderFlowList(filter) {
@@ -5984,8 +6146,8 @@ async function fetchFourMemeTokens() {
       c.onChain        = false; // 自动拉取，无 createCase
       courtData.live.unshift(c);
       recordOpenPrice(c);
-      // 平台自动注入初始底池（Owner 钱包签名）
-      if (walletConnected) {
+      // 平台自动注入初始底池（仅 owner 钱包连接时才签名，避免非 owner 用户弹窗）
+      if (walletConnected && walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
         callSeedGavelPool(c.id, c.gavelSeedInit).then(tx => {
           if (tx) console.log(`💰 seedGavelPool ${c.name}: ${c.gavelSeedInit} $GAVEL tx=${tx}`);
         });
@@ -9277,8 +9439,8 @@ async function settleCaseAuto(c) {
   const isUp   = closePrice >= openP;
   const change = openP > 0 ? ((closePrice-openP)/openP*100).toFixed(1) : '0';
 
-  // 结算前补足累积 $GAVEL 底池差额
-  if (walletConnected && c.openTime) {
+  // 结算前补足累积 $GAVEL 底池差额（仅 owner）
+  if (walletConnected && walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase() && c.openTime) {
     const accrued = Math.floor(calcGavelSeedDisplay(c.tier, c.openTime));
     const paid    = c.gavelSeedPaid || (GAVEL_SEED[c.tier]?.init || 100);
     const topUp   = Math.max(0, accrued - paid);

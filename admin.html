@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meme Court · 管理后台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #1a1a24;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0f0f5;
+  --text2: #9090a8;
+  --text3: #5a5a72;
+  --accent: #ff6340;
+  --accent2: rgba(255,99,64,0.15);
+  --green: #22c55e;
+  --green-bg: rgba(34,197,94,0.1);
+  --red: #ef4444;
+  --red-bg: rgba(239,68,68,0.1);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245,158,11,0.1);
+  --blue: #3b82f6;
+  --blue-bg: rgba(59,130,246,0.1);
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); color: var(--text); font-family: var(--sans); }
+body { min-height: 100vh; }
+
+/* ── NAV ── */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,15,0.92); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px; height: 56px;
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  letter-spacing: -.02em;
+}
+.nav-logo-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: .08em;
+  padding: 3px 8px; border-radius: 99px;
+  background: var(--accent2); color: var(--accent); border: 1px solid rgba(255,99,64,0.3);
+}
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.wallet-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 16px; border-radius: 99px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--sans); transition: all .15s;
+}
+.wallet-btn:hover { border-color: var(--accent); color: var(--accent); }
+.wallet-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
+.wallet-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+/* ── LAYOUT ── */
+.main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+/* ── ACCESS GATE ── */
+.gate {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: calc(100vh - 56px); gap: 20px; text-align: center;
+}
+.gate-icon { font-size: 56px; margin-bottom: 8px; }
+.gate-title { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.03em; }
+.gate-sub { font-size: 13px; color: var(--text2); max-width: 320px; line-height: 1.6; }
+.gate-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 28px; border-radius: var(--radius);
+  background: var(--accent); color: #fff;
+  border: none; font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: var(--sans); transition: opacity .15s;
+}
+.gate-btn:hover { opacity: .88; }
+.gate-error {
+  font-size: 12px; color: var(--red);
+  background: var(--red-bg); border: 1px solid rgba(239,68,68,0.2);
+  padding: 8px 16px; border-radius: var(--radius-sm);
+}
+
+/* ── HEADER ── */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 28px;
+}
+.page-title { font-size: 22px; font-weight: 700; letter-spacing: -.03em; }
+.page-title span { color: var(--accent); }
+.page-sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text2); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--sans); transition: all .15s;
+}
+.refresh-btn:hover { color: var(--text); border-color: var(--border2); }
+
+/* ── STATS BAR ── */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+}
+.stat-label { font-size: 10px; color: var(--text3); letter-spacing: .08em; margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+.stat-sub { font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+/* ── CASE TABLE ── */
+.section-title {
+  font-size: 11px; font-weight: 700; color: var(--text3);
+  letter-spacing: .08em; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.case-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 32px; }
+.case-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+  transition: border-color .15s;
+}
+.case-card:hover { border-color: var(--border2); }
+.case-card.settled { opacity: .65; }
+.case-top {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.case-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--bg3); display: flex; align-items: center;
+  justify-content: center; font-size: 20px; flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.case-info { flex: 1; }
+.case-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.case-token {
+  font-size: 10px; color: var(--text3); font-family: var(--mono);
+  margin-top: 2px; display: flex; align-items: center; gap: 6px;
+}
+.case-token a { color: var(--text3); text-decoration: none; }
+.case-token a:hover { color: var(--accent); }
+.case-status-badge {
+  font-size: 10px; font-weight: 700; padding: 4px 10px;
+  border-radius: 99px; letter-spacing: .04em; flex-shrink: 0;
+}
+.badge-live { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.badge-settled-up { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(59,130,246,0.25); }
+.badge-settled-down { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+
+.case-pools {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  margin-bottom: 14px;
+}
+.pool-box {
+  background: var(--bg3); border-radius: var(--radius-sm);
+  padding: 10px 12px; border: 1px solid var(--border);
+}
+.pool-label { font-size: 9px; color: var(--text3); letter-spacing: .06em; margin-bottom: 4px; }
+.pool-value { font-size: 14px; font-weight: 700; font-family: var(--mono); }
+.pool-value.up { color: var(--green); }
+.pool-value.down { color: var(--red); }
+.pool-value.neutral { color: var(--text2); }
+
+.case-actions { display: flex; gap: 8px; align-items: center; }
+.action-btn {
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: var(--sans); border: none; transition: opacity .15s;
+  display: flex; align-items: center; gap: 6px;
+}
+.action-btn:hover { opacity: .85; }
+.action-btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-up { background: var(--green); color: #fff; }
+.btn-down { background: var(--red); color: #fff; }
+.btn-seed { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+.btn-seed:hover { color: var(--text); }
+.settle-label {
+  font-size: 10px; color: var(--text3);
+  padding: 6px 10px; background: var(--bg3);
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+}
+
+.seed-row {
+  display: flex; gap: 8px; align-items: center; margin-top: 8px;
+}
+.seed-input {
+  flex: 1; padding: 8px 12px; border-radius: var(--radius-sm);
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); font-size: 12px; font-family: var(--mono);
+  outline: none;
+}
+.seed-input:focus { border-color: var(--accent); }
+.seed-input::placeholder { color: var(--text3); }
+
+/* ── EMPTY ── */
+.empty-state {
+  padding: 48px 20px; text-align: center; color: var(--text3);
+}
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-text { font-size: 13px; color: var(--text2); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); padding: 10px 20px; border-radius: 99px;
+  font-size: 13px; font-weight: 500; z-index: 9999;
+  opacity: 0; transition: opacity .2s; pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+
+/* ── LOADING ── */
+.loading-bar {
+  height: 2px; background: linear-gradient(90deg, var(--accent), #f59e0b);
+  position: fixed; top: 0; left: 0; z-index: 9999;
+  transition: width .3s ease; width: 0;
+}
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loadingBar"></div>
+<div class="toast" id="toast"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">
+    <span>⚖️</span>
+    <span>Meme Court</span>
+    <span class="nav-logo-badge">ADMIN</span>
+  </div>
+  <div class="nav-right">
+    <a href="./index.html" style="font-size:12px;color:var(--text3);text-decoration:none;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);transition:color .15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">← 返回主页</a>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
+      <span class="wallet-dot" id="walletDot"></span>
+      <span id="walletLabel">连接钱包</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ACCESS GATE -->
+<div class="gate" id="gate">
+  <div class="gate-icon">🔐</div>
+  <div class="gate-title">管理员专属后台</div>
+  <div class="gate-sub">请连接 Owner 钱包（<span style="font-family:monospace;color:var(--accent)">0xB008…4bD7</span>）以继续</div>
+  <button class="gate-btn" onclick="connectWallet()">
+    <svg width="16" height="16" viewBox="0 0 35 34" fill="none"><path d="M32.7077 32.7522L25.1688 30.5174L19.4833 33.9008L15.5167 33.8991L9.82793 30.5174L2.29225 32.7522L0 25.0489L2.29225 16.4993L0 9.27094L2.29225 0.312256L14.0674 7.31554H20.9326L32.7077 0.312256L35 9.27094L32.7077 16.4993L35 25.0489L32.7077 32.7522Z" fill="#FF5C16"/><path d="M20.9325 7.31543H17.4999H14.0673L13.6006 12.1251L16.0342 27.834H18.9656L21.4008 12.1251L20.9325 7.31543Z" fill="#FF8D5D"/></svg>
+    连接 MetaMask
+  </button>
+  <div class="gate-error" id="gateError" style="display:none"></div>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<div class="main" id="dashboard" style="display:none">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">裁判所 <span>后台</span></div>
+      <div class="page-sub" id="dashboardSub">MemeCourtV2 · BSC Testnet</div>
+    </div>
+    <button class="refresh-btn" onclick="loadAllCases()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+      刷新数据
+    </button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">总开庭案件</div>
+      <div class="stat-value" id="statTotal">—</div>
+      <div class="stat-sub">链上已记录</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">进行中</div>
+      <div class="stat-value" style="color:var(--green)" id="statLive">—</div>
+      <div class="stat-sub">等待宣判</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">已结算</div>
+      <div class="stat-value" style="color:var(--text2)" id="statSettled">—</div>
+      <div class="stat-sub">审判完毕</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">合约储备金</div>
+      <div class="stat-value" style="color:var(--accent)" id="statReserve">—</div>
+      <div class="stat-sub">$GAVEL</div>
+    </div>
+  </div>
+
+  <!-- LIVE CASES -->
+  <div class="section-title">⚡ 进行中 · 等待宣判</div>
+  <div class="case-grid" id="liveCases">
+    <div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">加载中…</div></div>
+  </div>
+
+  <!-- SETTLED CASES -->
+  <div class="section-title">✅ 已结算案件</div>
+  <div class="case-grid" id="settledCases">
+    <div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">加载中…</div></div>
+  </div>
+
+</div>
+
+<script>
+const GAVEL_TOKEN_ADDRESS = '0x5f9D91603accD8aA5a3ef73F611e229C463dd702';
+const MEME_COURT_ADDRESS  = '0xa692C5e7c08F0564e206a8c0F5427a29C2dce857';
+const OWNER_ADDRESS       = '0xB0088d6Eb46c3C15D878b54900ce1d5AEad54bD7';
+const BSC_TESTNET_RPC     = 'https://data-seed-prebsc-1-s1.binance.org:8545/';
+const BSC_TESTNET_CHAIN_ID = '0x61';
+
+const COURT_IFACE = new ethers.utils.Interface([
+  "function openCaseTokens(uint256) view returns (address)",
+  "function getOpenCase(address) view returns (tuple(uint256 upGavel,uint256 downGavel,uint256 gavelPool,bool settled,uint8 result,uint256 createdAt,uint256 settledAt))",
+  "function settleOpen(address tokenAddress, uint8 result)",
+  "function seedOpenPool(address tokenAddress, uint256 amount)",
+]);
+const GAVEL_IFACE = new ethers.utils.Interface([
+  "function balanceOf(address) view returns (uint256)",
+]);
+
+let walletAddress = null;
+let isOwner = false;
+
+// ── toast ──
+let _toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── loading bar ──
+function setLoading(pct) {
+  document.getElementById('loadingBar').style.width = pct + '%';
+  if (pct >= 100) setTimeout(() => document.getElementById('loadingBar').style.width = '0', 500);
+}
+
+// ── eth_call helper ──
+async function ethCall(to, data) {
+  const res = await fetch(BSC_TESTNET_RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc:'2.0', id:1, method:'eth_call', params:[{ to, data }, 'latest'] })
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message);
+  return json.result;
+}
+
+// ── callContract via MetaMask ──
+async function callContract(to, data, value='0x0') {
+  if (!window.ethereum) throw new Error('MetaMask 未安装');
+  const txHash = await window.ethereum.request({
+    method: 'eth_sendTransaction',
+    params: [{ from: walletAddress, to, data, value, gas: '0x7A120', gasPrice: '0x3B9ACA00' }]
+  });
+  return txHash;
+}
+
+// ── waitForTx ──
+async function waitForTx(txHash, maxWait=30000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    try {
+      const r = await window.ethereum.request({ method:'eth_getTransactionReceipt', params:[txHash] });
+      if (r) return r.status === '0x1';
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+// ── connect wallet ──
+async function connectWallet() {
+  if (!window.ethereum) {
+    document.getElementById('gateError').textContent = '请安装 MetaMask';
+    document.getElementById('gateError').style.display = 'block';
+    return;
+  }
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const addr = accounts[0];
+
+    // 检查网络
+    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+    if (chainId !== BSC_TESTNET_CHAIN_ID) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BSC_TESTNET_CHAIN_ID }]
+        });
+      } catch(e) {
+        document.getElementById('gateError').textContent = '请切换到 BSC Testnet（Chain ID 97）';
+        document.getElementById('gateError').style.display = 'block';
+        return;
+      }
+    }
+
+    walletAddress = addr;
+    isOwner = addr.toLowerCase() === OWNER_ADDRESS.toLowerCase();
+
+    // 更新 nav
+    document.getElementById('walletDot').className = 'wallet-dot connected';
+    document.getElementById('walletLabel').textContent = addr.slice(0,6) + '…' + addr.slice(-4);
+
+    if (!isOwner) {
+      document.getElementById('gateError').textContent = '⛔ 该钱包不是合约 Owner，无法访问管理后台';
+      document.getElementById('gateError').style.display = 'block';
+      return;
+    }
+
+    // 通过
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('dashboardSub').textContent = `Owner: ${addr.slice(0,8)}…${addr.slice(-6)} · BSC Testnet`;
+    loadAllCases();
+
+  } catch(e) {
+    if (e.code !== 4001) {
+      document.getElementById('gateError').textContent = e.message || '连接失败';
+      document.getElementById('gateError').style.display = 'block';
+    }
+  }
+}
+
+// ── load all cases from chain ──
+async function loadAllCases() {
+  setLoading(10);
+  document.getElementById('liveCases').innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">从链上读取案件…</div></div>';
+  document.getElementById('settledCases').innerHTML = '';
+
+  try {
+    // 1. 读取 openCaseTokens 数组
+    const tokens = [];
+    for (let i = 0; i < 100; i++) {
+      try {
+        const data = COURT_IFACE.encodeFunctionData('openCaseTokens', [i]);
+        const res  = await ethCall(MEME_COURT_ADDRESS, data);
+        if (!res || res === '0x') break;
+        const addr = '0x' + res.slice(-40);
+        if (addr === '0x' + '0'.repeat(40)) break;
+        tokens.push(addr);
+      } catch(e) { break; }
+    }
+
+    setLoading(40);
+
+    // 2. 读取每个 openCase
+    const cases = [];
+    for (const token of tokens) {
+      try {
+        const data = COURT_IFACE.encodeFunctionData('getOpenCase', [token]);
+        const res  = await ethCall(MEME_COURT_ADDRESS, data);
+        const decoded = COURT_IFACE.decodeFunctionResult('getOpenCase', res)[0];
+        cases.push({ token, decoded });
+      } catch(e) { console.warn('getOpenCase failed for', token, e); }
+    }
+
+    setLoading(70);
+
+    // 3. 读取合约储备金
+    try {
+      const balData = GAVEL_IFACE.encodeFunctionData('balanceOf', [MEME_COURT_ADDRESS]);
+      const balRes  = await ethCall(GAVEL_TOKEN_ADDRESS, balData);
+      const bal = GAVEL_IFACE.decodeFunctionResult('balanceOf', balRes)[0];
+      const balNum = Math.floor(Number(ethers.utils.formatUnits(bal, 18)));
+      document.getElementById('statReserve').textContent = balNum.toLocaleString();
+    } catch(e) {}
+
+    setLoading(90);
+
+    // 4. 渲染
+    const live    = cases.filter(c => !c.decoded.settled);
+    const settled = cases.filter(c =>  c.decoded.settled);
+
+    document.getElementById('statTotal').textContent   = cases.length;
+    document.getElementById('statLive').textContent    = live.length;
+    document.getElementById('statSettled').textContent = settled.length;
+
+    renderCases('liveCases',    live,    false);
+    renderCases('settledCases', settled, true);
+
+    setLoading(100);
+  } catch(e) {
+    showToast('加载失败：' + e.message);
+    setLoading(100);
+  }
+}
+
+// ── 从 four.meme token 地址查名称（简易：用链上 symbol）──
+const tokenNameCache = {};
+async function getTokenName(addr) {
+  if (tokenNameCache[addr]) return tokenNameCache[addr];
+  try {
+    const iface = new ethers.utils.Interface(["function symbol() view returns (string)", "function name() view returns (string)"]);
+    const symRes = await ethCall(addr, iface.encodeFunctionData('symbol', []));
+    const sym = iface.decodeFunctionResult('symbol', symRes)[0];
+    tokenNameCache[addr] = sym;
+    return sym;
+  } catch(e) {
+    return addr.slice(0,6) + '…' + addr.slice(-4);
+  }
+}
+
+// ── render cases ──
+async function renderCases(containerId, cases, isSettled) {
+  const el = document.getElementById(containerId);
+  if (cases.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">${isSettled ? '📁' : '⚡'}</div><div class="empty-text">${isSettled ? '暂无已结算案件' : '暂无进行中案件'}</div></div>`;
+    return;
+  }
+
+  // 先渲染骨架，再异步填 token 名
+  el.innerHTML = cases.map((c, idx) => buildCaseCard(c, idx, isSettled, '加载中…', '🪙')).join('');
+
+  // 异步填充 symbol
+  for (let idx = 0; idx < cases.length; idx++) {
+    const c = cases[idx];
+    getTokenName(c.token).then(sym => {
+      const nameEl = document.getElementById(`case-name-${containerId}-${idx}`);
+      if (nameEl) nameEl.textContent = sym;
+    });
+  }
+}
+
+function buildCaseCard(c, idx, isSettled, name, icon) {
+  const d = c.decoded;
+  const upGavel   = Number(ethers.utils.formatUnits(d.upGavel,   18));
+  const downGavel = Number(ethers.utils.formatUnits(d.downGavel, 18));
+  const gavelPool = Number(ethers.utils.formatUnits(d.gavelPool, 18));
+  const total     = upGavel + downGavel;
+  const settled   = d.settled;
+  const result    = Number(d.result); // 0=down,1=up
+  const containerId = isSettled ? 'settledCases' : 'liveCases';
+
+  let statusBadge;
+  if (!settled) {
+    statusBadge = '<span class="case-status-badge badge-live">⚡ 进行中</span>';
+  } else if (result === 1) {
+    statusBadge = '<span class="case-status-badge badge-settled-up">📈 看涨胜</span>';
+  } else {
+    statusBadge = '<span class="case-status-badge badge-settled-down">📉 看跌胜</span>';
+  }
+
+  const settledTime = settled && Number(d.settledAt) > 0
+    ? new Date(Number(d.settledAt) * 1000).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+    : '';
+
+  let actionsHtml = '';
+  if (!settled) {
+    actionsHtml = `
+      <div class="case-actions">
+        <button class="action-btn btn-up" onclick="settleCase('${c.token}', 1, this)">📈 宣判看涨胜</button>
+        <button class="action-btn btn-down" onclick="settleCase('${c.token}', 0, this)">📉 宣判看跌胜</button>
+      </div>
+      <div class="seed-row" style="margin-top:10px">
+        <input class="seed-input" id="seed-input-${containerId}-${idx}" type="number" placeholder="注入 $GAVEL 数量" min="1"/>
+        <button class="action-btn btn-seed" onclick="seedCase('${c.token}', '${containerId}-${idx}', this)">💰 注入奖池</button>
+      </div>`;
+  } else {
+    actionsHtml = `<div class="settle-label">✅ 已于 ${settledTime} 宣判</div>`;
+  }
+
+  return `<div class="case-card${settled ? ' settled' : ''}">
+    <div class="case-top">
+      <div class="case-icon">${icon}</div>
+      <div class="case-info">
+        <div class="case-name" id="case-name-${containerId}-${idx}">${name}</div>
+        <div class="case-token">
+          <span>${c.token.slice(0,8)}…${c.token.slice(-6)}</span>
+          <a href="https://testnet.bscscan.com/token/${c.token}" target="_blank">BSCScan ↗</a>
+        </div>
+      </div>
+      ${statusBadge}
+    </div>
+    <div class="case-pools">
+      <div class="pool-box">
+        <div class="pool-label">📈 看涨池</div>
+        <div class="pool-value up">${upGavel.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+        <div class="pool-label" style="margin-top:3px">$GAVEL</div>
+      </div>
+      <div class="pool-box">
+        <div class="pool-label">📉 看跌池</div>
+        <div class="pool-value down">${downGavel.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+        <div class="pool-label" style="margin-top:3px">$GAVEL</div>
+      </div>
+      <div class="pool-box">
+        <div class="pool-label">🏆 奖池</div>
+        <div class="pool-value neutral">${gavelPool.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+        <div class="pool-label" style="margin-top:3px">$GAVEL · ${total > 0 ? total.toLocaleString(undefined,{maximumFractionDigits:0}) + ' 总押注' : '暂无押注'}</div>
+      </div>
+    </div>
+    ${actionsHtml}
+  </div>`;
+}
+
+// ── settleCase ──
+async function settleCase(tokenAddress, result, btn) {
+  const label = result === 1 ? '看涨胜' : '看跌胜';
+  if (!confirm(`确认宣判 ${tokenAddress.slice(0,8)}… 结果为「${label}」？此操作不可撤销。`)) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 宣判中…';
+  // 同时禁用同卡片另一个按钮
+  const sibling = btn.parentElement.querySelector(`.action-btn:not([disabled])`);
+  if (sibling) sibling.disabled = true;
+
+  try {
+    const data  = COURT_IFACE.encodeFunctionData('settleOpen', [tokenAddress, result]);
+    const txHash = await callContract(MEME_COURT_ADDRESS, data);
+    showToast(`⏳ 宣判交易已提交，等待确认…`);
+    const ok = await waitForTx(txHash);
+    if (ok) {
+      showToast(`✅ 宣判成功！结果：${label}`);
+      setTimeout(loadAllCases, 2000);
+    } else {
+      showToast('❌ 宣判交易失败');
+      btn.disabled = false; btn.textContent = result===1 ? '📈 宣判看涨胜' : '📉 宣判看跌胜';
+      if (sibling) sibling.disabled = false;
+    }
+  } catch(e) {
+    if (e.code !== 4001) showToast('宣判失败：' + (e.message||''));
+    btn.disabled = false; btn.textContent = result===1 ? '📈 宣判看涨胜' : '📉 宣判看跌胜';
+    if (sibling) sibling.disabled = false;
+  }
+}
+
+// ── seedCase ──
+async function seedCase(tokenAddress, inputId, btn) {
+  const input = document.getElementById('seed-input-' + inputId);
+  const amount = parseFloat(input?.value);
+  if (!amount || amount <= 0) { showToast('请输入注入数量'); return; }
+
+  btn.disabled = true; btn.textContent = '⏳ 注入中…';
+  try {
+    const amtWei = ethers.utils.parseUnits(amount.toString(), 18);
+    const data   = COURT_IFACE.encodeFunctionData('seedOpenPool', [tokenAddress, amtWei]);
+    const txHash = await callContract(MEME_COURT_ADDRESS, data);
+    showToast('⏳ 注入交易已提交…');
+    const ok = await waitForTx(txHash);
+    if (ok) {
+      showToast(`✅ 已注入 ${amount.toLocaleString()} $GAVEL`);
+      if (input) input.value = '';
+      setTimeout(loadAllCases, 2000);
+    } else {
+      showToast('❌ 注入失败');
+    }
+  } catch(e) {
+    if (e.code !== 4001) showToast('注入失败：' + (e.message||''));
+  }
+  btn.disabled = false; btn.textContent = '💰 注入奖池';
+}
+
+// ── auto-connect if already connected ──
+window.addEventListener('load', async () => {
+  if (window.ethereum) {
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accounts.length > 0) {
+        walletAddress = accounts[0];
+        document.getElementById('walletDot').className = 'wallet-dot connected';
+        document.getElementById('walletLabel').textContent = walletAddress.slice(0,6) + '…' + walletAddress.slice(-4);
+        if (walletAddress.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
+          isOwner = true;
+          document.getElementById('gate').style.display = 'none';
+          document.getElementById('dashboard').style.display = 'block';
+          document.getElementById('dashboardSub').textContent = `Owner: ${walletAddress.slice(0,8)}…${walletAddress.slice(-6)} · BSC Testnet`;
+          loadAllCases();
+        }
+      }
+    } catch(e) {}
+
+    window.ethereum.on('accountsChanged', accs => {
+      if (accs.length === 0) {
+        walletAddress = null; isOwner = false;
+        document.getElementById('gate').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('walletDot').className = 'wallet-dot';
+        document.getElementById('walletLabel').textContent = '连接钱包';
+      } else {
+        location.reload();
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>
