@@ -6345,8 +6345,8 @@ function renderCourtCards() {
 
 function openCourtDetail(id) {
   if (id === 'DEMO-001') setTimeout(() => startDemoVerdictAnimation(), 800);
-  // 找到案件数据
-  const allCases = [...courtData.live, ...courtData.pending, ...courtData.closed];
+  // 找到案件数据（包含 demo）
+  const allCases = [...courtData.live, ...courtData.pending, ...courtData.closed, ...(courtData.demo||[])];
   const c = allCases.find(x => x.id === id);
   if (!c) return;
 
@@ -6363,7 +6363,7 @@ function openCourtDetail(id) {
   const bpRiskWarn = document.getElementById('bpRiskWarning');
   if (bpRiskWarn) bpRiskWarn.remove();
 
-  const isLive = courtData.live.includes(c);
+  const isLive = courtData.live.includes(c) || (courtData.demo||[]).includes(c);
   const isPending = courtData.pending.includes(c);
   const isClosed = courtData.closed.includes(c);
 
