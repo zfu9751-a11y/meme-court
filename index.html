@@ -6842,8 +6842,14 @@ async function submitDetailBet() {
     if (bf) spawnDanmaku(bf, detailBetDir, true, detailBetDir==='up'?'我押涨！🚀':'我押跌！💀');
 
     showToast('✅ 链上押注成功！');
-    // 弹出陪审员卡片（附带 tx hash）
-    setTimeout(() => openJurorCard(currentDetailCase, detailBetDir, amt, betTx), 400);
+
+    // demo 模式：押注成功后启动 15 秒倒计时
+    if (_isDemoFlow) {
+      startDemoCountdown();
+    } else {
+      // 弹出陪审员卡片（附带 tx hash）
+      setTimeout(() => openJurorCard(currentDetailCase, detailBetDir, amt, betTx), 400);
+    }
 
   } catch(e) {
     showToast('押注失败：' + (e.message || '未知错误'));
@@ -10258,6 +10264,22 @@ function startDemoVerdictAnimation() {
   }, 300);
 }
 
+// 等待交易上链确认（轮询 receipt）
+async function waitForTx(txHash, maxWait = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    try {
+      const receipt = await window.ethereum.request({
+        method: 'eth_getTransactionReceipt',
+        params: [txHash]
+      });
+      if (receipt) return receipt.status === '0x1'; // true = success
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return false;
+}
+
 async function startDemoFlow() {
   if (!walletConnected) { showToast('请先连接钱包 🦊'); return; }
   const c = courtData.demo && courtData.demo[0];
@@ -10265,7 +10287,7 @@ async function startDemoFlow() {
 
   c._step = 'creating';
   renderCourtCards();
-  showToast('Step 1/4：创建链上案件...');
+  showToast('Step 1/4：MetaMask 确认创建案件...');
 
   // 真实调用 createCase，0.1 tBNB
   const tx = await createCaseOnChain(c.id, 0, 0.1);
@@ -10276,12 +10298,23 @@ async function startDemoFlow() {
     return;
   }
 
-  // 开庭成功
-  c.bnbPool  = 0.07; // 70% 进奖池
+  showToast('⏳ 等待链上确认...');
+
+  // 等待 createCase 真实上链确认
+  const success = await waitForTx(tx);
+  if (!success) {
+    c._step = 'init';
+    renderCourtCards();
+    showToast('❌ 链上确认失败，请重试');
+    return;
+  }
+
+  // 开庭成功，真实 BNB 进奖池
+  c.bnbPool  = 0.07;
   c.openTime = Date.now();
   c._step    = 'betting';
   renderCourtCards();
-  showToast(`✅ 案件已创建上链 · tx: ${tx.slice(0,10)}...`);
+  showToast(`✅ 案件上链确认！tx: ${tx.slice(0,10)}... · 可以开始押注`);
 
   // 启动 AI 裁定动画
   setTimeout(() => startDemoVerdictAnimation(), 500);
@@ -10303,13 +10336,22 @@ async function settleDemoCase() {
   if (!c) return;
 
   c._step = 'settling';
-  showToast('Step 3/4：链上结算...');
+  showToast('Step 3/4：链上结算，请 MetaMask 确认...');
 
   // 真实调用 settle(caseId, 1) — 看涨方胜
+  let settleTx = null;
   try {
     const settleData = encodeFunctionCall('settle(string,uint8)', [c.id, 1]);
-    const settleTx   = await callContract(MEME_COURT_ADDRESS, settleData);
-    if (settleTx) showToast(`✅ 结算上链 · tx: ${settleTx.slice(0,10)}...`);
+    settleTx = await callContract(MEME_COURT_ADDRESS, settleData);
+    if (settleTx) {
+      showToast('⏳ 等待结算确认...');
+      const ok = await waitForTx(settleTx);
+      if (ok) {
+        showToast(`✅ 结算上链确认！tx: ${settleTx.slice(0,10)}...`);
+      } else {
+        showToast('⚠️ 结算链上确认失败，继续前端结算');
+      }
+    }
   } catch(e) { console.warn('settle:', e); }
 
   c.closePrice    = c.openPrice * 1.10;
