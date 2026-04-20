@@ -4627,7 +4627,7 @@ async function callContract(to, data, value = '0x0') {
   try {
     const txHash = await window.ethereum.request({
       method: 'eth_sendTransaction',
-      params: [{ from: walletAddress, to, data, value, gas: '0x493E0' }]
+      params: [{ from: walletAddress, to, data, value, gas: '0x493E0', gasPrice: '0x3B9ACA00' }]
     });
     return txHash;
   } catch(e) {
@@ -5361,9 +5361,24 @@ async function submitBet() {
       await new Promise(r => setTimeout(r, 5000));
     }
 
-    // ── Step 2：押注 ──
+    // ── Step 2：确认 allowance 后押注 ──
     btn.textContent = '⏳ 链上押注中…';
     showToast('Step 2/2：链上押注…');
+
+    // 再次确认 allowance 足够
+    const allowanceData = '0xdd62ed3e' + walletAddress.slice(2).toLowerCase().padStart(64,'0') + MEME_COURT_ADDRESS.slice(2).toLowerCase().padStart(64,'0');
+    const allowanceRes = await readContract(GAVEL_TOKEN_ADDRESS, allowanceData);
+    const currentAllowance = allowanceRes ? BigInt(allowanceRes) : BigInt(0);
+    if (currentAllowance < amtWei) {
+      // allowance 不够，重新 approve
+      showToast('⏳ 重新授权中...');
+      const reApproveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
+      const reApproveTx = await callContract(GAVEL_TOKEN_ADDRESS, reApproveData);
+      if (!reApproveTx) { btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌'; btn.disabled = false; return; }
+      if (typeof waitForTx === 'function') await waitForTx(reApproveTx);
+      else await new Promise(r => setTimeout(r, 5000));
+    }
+
     const betData = _useOpenBet
       ? encodeOpenBet(betCoin.contract, dirCode, amtWei)   // 自动拉取案件
       : encodeBetWithGavel(caseId, dirCode, amtWei);        // 手动申请案件
@@ -6880,9 +6895,23 @@ async function submitDetailBet() {
       await new Promise(r => setTimeout(r, 5000));
     }
 
-    // Step 2: betWithGavel
+    // Step 2: 确认 allowance 后押注
     btn.textContent = '⏳ 链上押注中…';
     showToast('Step 2/2：链上押注…');
+
+    // 再次确认 allowance 足够
+    const allowanceData = '0xdd62ed3e' + walletAddress.slice(2).toLowerCase().padStart(64,'0') + MEME_COURT_ADDRESS.slice(2).toLowerCase().padStart(64,'0');
+    const allowanceRes = await readContract(GAVEL_TOKEN_ADDRESS, allowanceData);
+    const currentAllowance = allowanceRes ? BigInt(allowanceRes) : BigInt(0);
+    if (currentAllowance < amtWei) {
+      showToast('⏳ 重新授权中...');
+      const reApproveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
+      const reApproveTx = await callContract(GAVEL_TOKEN_ADDRESS, reApproveData);
+      if (!reApproveTx) { btn.textContent = '确认押注'; btn.disabled = false; return; }
+      if (typeof waitForTx === 'function') await waitForTx(reApproveTx);
+      else await new Promise(r => setTimeout(r, 5000));
+    }
+
     // 自动拉取案件 → openBet(tokenAddress)，手动申请 → betWithGavel(caseId)
     const betData = _useOpenBet
       ? encodeOpenBet(_betToken, dirCode, amtWei)
