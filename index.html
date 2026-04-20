@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meme 法庭</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 <style>
 :root {
   --bg: #f5f4f0; --white: #ffffff; --border: #e8e8e4; --border2: #d4d4ce;
@@ -4593,6 +4594,17 @@ const COURT_ABI = [
   'function tierMinFee(uint256) view returns (uint256)',
 ];
 
+// ── MemeCourtV2 Interface（ethers.js 自动计算 selector，避免手动出错）──
+const MEME_COURT_IFACE = new ethers.utils.Interface([
+  "function openBet(address tokenAddress, uint8 direction, uint256 amount)",
+  "function settleOpen(address tokenAddress, uint8 result)",
+  "function claimOpenReward(address tokenAddress)",
+  "function seedOpenPool(address tokenAddress, uint256 amount)",
+  "function betWithGavel(string caseId, uint8 direction, uint256 amount)",
+  "function claimNewbie()",
+  "function seedGavelPool(string caseId, uint256 amount)"
+]);
+
 // 简易 ABI encoder（不依赖 ethers.js）
 function encodeCall(fnSig, ...args) {
   const selector = keccak256(fnSig).slice(0, 10);
@@ -4627,7 +4639,7 @@ async function callContract(to, data, value = '0x0') {
   try {
     const txHash = await window.ethereum.request({
       method: 'eth_sendTransaction',
-      params: [{ from: walletAddress, to, data, value, gas: '0x7A120', gasPrice: '0x3B9ACA00' }]
+      params: [{ from: walletAddress, to, data, value, gas: '0x493E0', gasPrice: '0x3B9ACA00' }]
     });
     return txHash;
   } catch(e) {
@@ -4664,7 +4676,7 @@ async function fetchRealGavelBalance(addr) {
 async function claimNewbieOnChain() {
   if (!walletConnected) { showToast('请先连接钱包'); return; }
   showToast('⏳ 正在链上领取新人礼包…');
-  const txHash = await callContract(MEME_COURT_ADDRESS, '0x04c58d28');
+  const txHash = await callContract(MEME_COURT_ADDRESS, MEME_COURT_IFACE.encodeFunctionData('claimNewbie', []));
   if (txHash) {
     showToast('🎁 新人礼包领取成功！500 $GAVEL 已到账');
     // 刷新余额
@@ -5360,31 +5372,23 @@ async function submitBet() {
     } else {
       await new Promise(r => setTimeout(r, 5000));
     }
-    // 额外等待 3 秒，确保节点状态同步（防止 eth_estimateGas 拿到旧 allowance）
-    await new Promise(r => setTimeout(r, 3000));
 
     // ── Step 2：确认 allowance 后押注 ──
     btn.textContent = '⏳ 链上押注中…';
     showToast('Step 2/2：链上押注…');
 
-    // 再次确认 allowance 足够（轮询直到确认，最多 15 秒）
+    // 再次确认 allowance 足够
     const allowanceData = '0xdd62ed3e' + walletAddress.slice(2).toLowerCase().padStart(64,'0') + MEME_COURT_ADDRESS.slice(2).toLowerCase().padStart(64,'0');
-    let currentAllowance = BigInt(0);
-    for (let i = 0; i < 5; i++) {
-      const allowanceRes = await readContract(GAVEL_TOKEN_ADDRESS, allowanceData);
-      currentAllowance = allowanceRes ? BigInt(allowanceRes) : BigInt(0);
-      if (currentAllowance >= amtWei) break;
-      await new Promise(r => setTimeout(r, 3000));
-    }
+    const allowanceRes = await readContract(GAVEL_TOKEN_ADDRESS, allowanceData);
+    const currentAllowance = allowanceRes ? BigInt(allowanceRes) : BigInt(0);
     if (currentAllowance < amtWei) {
-      // allowance 仍不够，重新 approve
+      // allowance 不够，重新 approve
       showToast('⏳ 重新授权中...');
       const reApproveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
       const reApproveTx = await callContract(GAVEL_TOKEN_ADDRESS, reApproveData);
       if (!reApproveTx) { btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌'; btn.disabled = false; return; }
       if (typeof waitForTx === 'function') await waitForTx(reApproveTx);
       else await new Promise(r => setTimeout(r, 5000));
-      await new Promise(r => setTimeout(r, 3000));
     }
 
     const betData = _useOpenBet
@@ -5475,61 +5479,47 @@ function encodeApprove(spender, amountWei) {
 }
 
 function encodeBetWithGavel(caseId, direction, amountWei) {
-  // betWithGavel(string,uint8,uint256)
-  // selector precomputed: keccak256("betWithGavel(string,uint8,uint256)") -> 首4字节
-  const sel = '7b9a3706'; // SELECTORS.betWithGavel
-  // ABI encoding: (string, uint8, uint256)
-  // offsets: string @ 0x60, uint8, uint256, then string data
-  const strOffset = '0000000000000000000000000000000000000000000000000000000000000060';
-  const dirHex    = direction.toString(16).padStart(64,'0');
-  const amtHex    = amountWei.toString(16).padStart(64,'0');
-  const strData   = encodeStringParam(caseId);
-  return '0x' + sel + strOffset + dirHex + amtHex + strData;
+  return MEME_COURT_IFACE.encodeFunctionData('betWithGavel', [
+    caseId,
+    direction,
+    amountWei.toString()
+  ]);
 }
 
-// ── V2 openBet 编码函数 ──
+// ── V2 openBet 编码函数（使用顶部定义的 MEME_COURT_IFACE）──
 
-// openBet(address,uint8,uint256) — selector: d7613f77
+// 打印所有 selector 供调试（页面加载时会在 console 显示）
+setTimeout(() => {
+  console.log('[ABI] openBet selector:', MEME_COURT_IFACE.getSighash('openBet'));
+  console.log('[ABI] settleOpen selector:', MEME_COURT_IFACE.getSighash('settleOpen'));
+  console.log('[ABI] betWithGavel selector:', MEME_COURT_IFACE.getSighash('betWithGavel'));
+  console.log('[ABI] claimNewbie selector:', MEME_COURT_IFACE.getSighash('claimNewbie'));
+}, 500);
+
 function encodeOpenBet(tokenAddress, direction, amountWei) {
-  const sel    = 'd7613f77';
-  const addrHex = tokenAddress.slice(2).toLowerCase().padStart(64,'0');
-  const dirHex  = direction.toString(16).padStart(64,'0');
-  const amtHex  = amountWei.toString(16).padStart(64,'0');
-  return '0x' + sel + addrHex + dirHex + amtHex;
+  return MEME_COURT_IFACE.encodeFunctionData('openBet', [
+    tokenAddress,
+    direction,
+    amountWei.toString()
+  ]);
 }
 
-// settleOpen(address,uint8) — selector: 5aa3e906
 function encodeSettleOpen(tokenAddress, result) {
-  const sel     = '5aa3e906';
-  const addrHex = tokenAddress.slice(2).toLowerCase().padStart(64,'0');
-  const resHex  = result.toString(16).padStart(64,'0');
-  return '0x' + sel + addrHex + resHex;
+  return MEME_COURT_IFACE.encodeFunctionData('settleOpen', [tokenAddress, result]);
 }
 
-// claimOpenReward(address) — selector: 59a2dbb2
 function encodeClaimOpenReward(tokenAddress) {
-  const sel     = '59a2dbb2';
-  const addrHex = tokenAddress.slice(2).toLowerCase().padStart(64,'0');
-  return '0x' + sel + addrHex;
+  return MEME_COURT_IFACE.encodeFunctionData('claimOpenReward', [tokenAddress]);
 }
 
-// seedOpenPool(address,uint256) — selector: 950425be
 function encodeSeedOpenPool(tokenAddress, amountWei) {
-  const sel     = '950425be';
-  const addrHex = tokenAddress.slice(2).toLowerCase().padStart(64,'0');
-  const amtHex  = amountWei.toString(16).padStart(64,'0');
-  return '0x' + sel + addrHex + amtHex;
+  return MEME_COURT_IFACE.encodeFunctionData('seedOpenPool', [tokenAddress, amountWei.toString()]);
 }
 
 // seedGavelPool(string,uint256) — 平台注入基础奖池
 function encodeSeedGavelPool(caseId, amountGavel) {
-  const sel = 'b4e3a0b4'; // keccak256("seedGavelPool(string,uint256)") 前4字节
-  // ABI: string at offset 0x40, uint256, then string data
-  const strOffset = '0000000000000000000000000000000000000000000000000000000000000040';
-  const amtWei    = BigInt(Math.floor(amountGavel * 1e18));
-  const amtHex    = amtWei.toString(16).padStart(64,'0');
-  const strData   = encodeStringParam(caseId);
-  return '0x' + sel + strOffset + amtHex + strData;
+  const amtWei = ethers.utils.parseUnits(amountGavel.toString(), 18);
+  return MEME_COURT_IFACE.encodeFunctionData('seedGavelPool', [caseId, amtWei]);
 }
 
 // 调用 seedGavelPool：Owner 钱包注入基础 $GAVEL 奖池
@@ -6902,22 +6892,15 @@ async function submitDetailBet() {
     } else {
       await new Promise(r => setTimeout(r, 5000));
     }
-    // 额外等待 3 秒，确保节点状态同步
-    await new Promise(r => setTimeout(r, 3000));
 
     // Step 2: 确认 allowance 后押注
     btn.textContent = '⏳ 链上押注中…';
     showToast('Step 2/2：链上押注…');
 
-    // 轮询确认 allowance 足够（最多 15 秒）
+    // 再次确认 allowance 足够
     const allowanceData = '0xdd62ed3e' + walletAddress.slice(2).toLowerCase().padStart(64,'0') + MEME_COURT_ADDRESS.slice(2).toLowerCase().padStart(64,'0');
-    let currentAllowance = BigInt(0);
-    for (let i = 0; i < 5; i++) {
-      const allowanceRes = await readContract(GAVEL_TOKEN_ADDRESS, allowanceData);
-      currentAllowance = allowanceRes ? BigInt(allowanceRes) : BigInt(0);
-      if (currentAllowance >= amtWei) break;
-      await new Promise(r => setTimeout(r, 3000));
-    }
+    const allowanceRes = await readContract(GAVEL_TOKEN_ADDRESS, allowanceData);
+    const currentAllowance = allowanceRes ? BigInt(allowanceRes) : BigInt(0);
     if (currentAllowance < amtWei) {
       showToast('⏳ 重新授权中...');
       const reApproveData = encodeApprove(MEME_COURT_ADDRESS, amtWei);
@@ -6925,7 +6908,6 @@ async function submitDetailBet() {
       if (!reApproveTx) { btn.textContent = '确认押注'; btn.disabled = false; return; }
       if (typeof waitForTx === 'function') await waitForTx(reApproveTx);
       else await new Promise(r => setTimeout(r, 5000));
-      await new Promise(r => setTimeout(r, 3000));
     }
 
     // 自动拉取案件 → openBet(tokenAddress)，手动申请 → betWithGavel(caseId)
