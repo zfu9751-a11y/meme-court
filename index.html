@@ -5393,6 +5393,9 @@ async function submitBet() {
     renderRankList();
     showToast('✅ 链上押注成功！');
 
+    // demo 模式：押注成功后启动 15 秒倒计时
+    if (_isDemoFlow) startDemoCountdown();
+
   } catch(e) {
     showToast('押注失败：' + (e.message || '未知错误'));
     btn.textContent = betDirection === 'up' ? '📈 押注看涨' : '📉 押注看跌';
