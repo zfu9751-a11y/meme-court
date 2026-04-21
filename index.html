@@ -2590,7 +2590,7 @@ textarea::placeholder{color:var(--text3)}
               <button onclick="switchFlowTab('reward',this)" style="font-size:10px;padding:3px 10px;border-radius:6px;cursor:pointer;color:#a8a8a4;background:transparent;border:none;font-family:var(--sans);transition:all .12s" class="flow-tab-btn">奖励</button>
             </div>
           </div>
-          <div id="gavelHistoryList"></div>
+          <div id="gavelHistoryList" style="max-height:420px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#e8e4de transparent"></div>
         </div>
 
         <!-- 右侧：GAVEL 等级 + 战绩卡 -->
@@ -9502,19 +9502,21 @@ function settleUserBets(c, winDir) {
       const won = (winDir==='up' && r.dir==='up') || (winDir==='down' && r.dir==='down');
       r.status = won ? 'win' : 'lose';
       if (won) {
+        const betAmt = r.amt || r.amount || 0;
         const mult = winDir==='up' ? (c._upMult||2.0) : (c._downMult||2.0);
-        r.reward = Math.floor(r.amt * mult);
+        r.reward = Math.floor(betAmt * mult);
         saveGavelHistory({ type:'win', positive:true, icon:'🏆',
           title:`押注获胜 · ${c.name} ${c.verdictResult}`,
-          sub:`押注 ${r.amt} $GAVEL · ${winDir==='up'?'看涨':'看跌'}`,
+          sub:`押注 ${betAmt} $GAVEL · ${winDir==='up'?'看涨':'看跌'}`,
           amount:`+${r.reward.toLocaleString()}`, rawAmount:r.reward,
           date:new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}),
           caseId:c.id, claimable:true });
       } else {
+        const betAmt = r.amt || r.amount || 0;
         saveGavelHistory({ type:'lose', positive:false, icon:'💸',
           title:`押注失败 · ${c.name} ${c.verdictResult}`,
-          sub:`押注 ${r.amt} $GAVEL · 方向押错`,
-          amount:`-${r.amt.toLocaleString()}`, rawAmount:r.amt,
+          sub:`押注 ${betAmt} $GAVEL · 方向押错`,
+          amount:`-${betAmt.toLocaleString()}`, rawAmount:betAmt,
           date:new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}),
           caseId:c.id, claimable:false });
       }
