@@ -1999,7 +1999,7 @@ textarea::placeholder{color:var(--text3)}
             </div>
             <div style="width:1px;height:14px;background:rgba(255,255,255,0.1)"></div>
             <div style="display:flex;align-items:center;gap:7px">
-              <span style="font-size:12px;font-weight:700;color:#fff">7</span>
+              <span style="font-size:12px;font-weight:700;color:#fff" id="heroPendingCount">7</span>
               <span style="font-size:12px;color:rgba(255,255,255,0.35)">候审中</span>
             </div>
             <div style="width:1px;height:14px;background:rgba(255,255,255,0.1)"></div>
@@ -2009,7 +2009,7 @@ textarea::placeholder{color:var(--text3)}
             </div>
             <div style="width:1px;height:14px;background:rgba(255,255,255,0.1)"></div>
             <div style="display:flex;align-items:center;gap:7px">
-              <span style="font-size:12px;font-weight:700;color:#fff">1,247</span>
+              <span style="font-size:12px;font-weight:700;color:#fff" id="heroTotalParticipants">1,247</span>
               <span style="font-size:12px;color:rgba(255,255,255,0.35)">参与押注</span>
             </div>
           </div>
@@ -3411,10 +3411,6 @@ function toggleVerdict() {
 
 /* ── 今日开庭 新币数据 ── */
 const newCoins = [
-  {id:1, icon:'🦊', name:'FOXAI', time:'2小时前', liq:'$48K', holders:'312', change:'+127%', risk:'high', riskLabel:'高风险', heatScore:88,
-   verdictShort:'本庭注意到 FOXAI 在过去两小时内吸引了大量早期进场者。机会确实存在，但流动性薄如蝉翼，稍有风吹草动即可能血崩。',
-   verdictFull:'从链上数据看，前 10 地址持有 68% 筹码，高度集中。初始流动性 $48K 属于极低水位，任何大单都可能造成剧烈滑点。\n建议仓位不超总资产 2%，且必须设置止损。叙事角度看，AI+Fox 的组合有一定新颖性，但需要观察社区能否持续扩张。',
-   tags:['four.meme NEW','AI 叙事','高波动'], fourUrl:'https://four.meme'},
   {id:2, icon:'🌙', name:'MOONPIG', time:'5小时前', liq:'$156K', holders:'891', change:'+43%', risk:'mid', riskLabel:'中风险', heatScore:76,
    verdictShort:'MOONPIG 的社区活跃度在同期新币中属于上游水平。流动性尚可，但本庭提醒：猪会飞的前提是有人托举。',
    verdictFull:'持仓分布相对均匀，前 10 地址持仓比例约 41%，优于行业平均。过去 5 小时链上交易笔数稳定增长，显示真实用户参与。\n风险点在于整体市场情绪，若大盘走弱，此类新兴项目往往首当其冲。建议小仓参与，止盈设在 2-3 倍。',
@@ -5445,6 +5441,17 @@ async function submitBet() {
     renderRankList();
     showToast('✅ 链上押注成功！');
 
+    // 第一笔 openBet 成功后，owner 自动注入初始奖池
+    if (_useOpenBet && betCoin.contract && walletConnected &&
+        walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
+      const seedAmt = betCoin.gavelSeedInit || GAVEL_SEED[betCoin.tier]?.init || 100;
+      const seedWei = BigInt(Math.floor(seedAmt)) * BigInt('1000000000000000000');
+      encodeSeedOpenPool(betCoin.contract, seedWei);
+      callContract(MEME_COURT_ADDRESS, encodeSeedOpenPool(betCoin.contract, seedWei))
+        .then(tx => { if (tx) console.log(`💰 seedOpenPool ${betCoin.name}: ${seedAmt} $GAVEL tx=${tx}`); })
+        .catch(e => console.warn('seedOpenPool failed:', e));
+    }
+
     // demo 模式：押注成功后启动 15 秒倒计时
     if (_isDemoFlow) startDemoCountdown();
 
@@ -6134,12 +6141,8 @@ async function fetchFourMemeTokens() {
       c.onChain        = false; // 自动拉取，无 createCase
       courtData.live.unshift(c);
       recordOpenPrice(c);
-      // 平台自动注入初始底池（仅 owner 钱包连接时才签名，避免非 owner 用户弹窗）
-      if (walletConnected && walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
-        callSeedGavelPool(c.id, c.gavelSeedInit).then(tx => {
-          if (tx) console.log(`💰 seedGavelPool ${c.name}: ${c.gavelSeedInit} $GAVEL tx=${tx}`);
-        });
-      }
+      // seedOpenPool 需要先有人 openBet 才能调用，新币入庭时不调用
+      // 路演时可在 Admin 后台手动注入奖池
     });
     if (toPromote.length) console.log(`🚀 ${toPromote.length} 个案件自动升入进行中`);
 
@@ -6220,20 +6223,7 @@ async function fetchFourMemeTableDataV2(tokens) {
 
 
 const courtData = {
-  live: [
-    {
-      id:'C-2026-041', icon:'🦊', name:'FOXAI', source:'four.meme · 2小时前上线',
-      tier:'fast', tierLabel:'快审', tierCls:'cc-tier-fast',
-      timer:'2h 58m', urgent:false,
-      betUp:62, betDown:38,
-      pool:4200, participants:89,
-      liq:'$48K', holders:'312', change:'+127%', changeUp:true, whale:'🐳买入',
-      initiator:'项目方',
-      openPrice: 0.00048,
-      endTime: Date.now() + 3 * 3600 * 1000,
-      onChain: false, contract: null,
-    },
-  ],
+  live: [],
   pending: [
     {
       id:'C-2026-042', icon:'🍄', name:'SHROOMZ', source:'four.meme · 18小时前上线',
@@ -6382,6 +6372,20 @@ function updateCourtTabCounts() {
   setC('courtTabCount-all',     total);
   setC('courtTabCount-live',    courtData.live.length);
   setC('courtTabCount-pending', courtData.pending.length);
+
+  // 同步精选底栏数据
+  setC('heroLiveCount',    courtData.live.length);
+  setC('heroPendingCount', courtData.pending.length);
+
+  const totalPool = [...courtData.live, ...courtData.pending]
+    .reduce((s, c) => s + (c.pool || 0), 0);
+  const totalParticipants = [...courtData.live, ...courtData.pending]
+    .reduce((s, c) => s + (c.participants || 0), 0);
+  setC('heroTotalPool', totalPool > 0 ? totalPool.toLocaleString() : '—');
+  setC('heroTotalParticipants', totalParticipants > 0 ? totalParticipants.toLocaleString() : '—');
+
+  // 同步 Meme 雷达 KPI 今日新币
+  if (total > 0) setC('kpiNewCoins', total);
 }
 
 function calcPendingProgress(c) {
@@ -6405,14 +6409,31 @@ function calcPendingProgress(c) {
   return { pct, hint, color };
 }
 
-function formatCountdown(endTime) {
+function formatCountdown(endTime, asHtml = false) {
   const diff = endTime - Date.now();
-  if (diff <= 0) return '⏰ 已到期';
-  const h = Math.floor(diff/3600000);
-  const m = Math.floor((diff%3600000)/60000);
-  if (h >= 24) return `${Math.floor(h/24)}天${h%24}h`;
-  if (h > 0)   return `${h}h ${m}m`;
-  return `${m}m`;
+  if (diff <= 0) return asHtml ? '<span style="color:var(--red)">⏰ 已到期</span>' : '⏰ 已到期';
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  const urgent = diff < 10 * 60000; // 最后10分钟
+  const critical = diff < 60000;    // 最后1分钟
+
+  if (!asHtml) {
+    if (h >= 24) return `${Math.floor(h/24)}天${h%24}h`;
+    if (h > 0)   return `${h}h ${m}m ${s}s`;
+    if (m > 0)   return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  // HTML 版本：秒数高亮，紧急时变红
+  const baseColor = urgent ? 'var(--red)' : 'var(--text)';
+  const secColor  = critical ? 'var(--red)' : urgent ? '#ff6340' : 'var(--accent)';
+  const secStyle  = `color:${secColor};font-weight:900;font-family:var(--mono)`;
+
+  if (h >= 24) return `<span style="color:${baseColor}">${Math.floor(h/24)}天${h%24}h</span>`;
+  if (h > 0)   return `<span style="color:${baseColor}">${h}h ${m}m </span><span style="${secStyle}">${String(s).padStart(2,'0')}s</span>`;
+  if (m > 0)   return `<span style="color:${urgent?'var(--red)':'var(--text)'}">${m}m </span><span style="${secStyle}">${String(s).padStart(2,'0')}s</span>`;
+  return `<span style="${secStyle};font-size:1.1em">${s}s</span>`;
 }
 
 function renderCourtCards() {
@@ -6465,7 +6486,7 @@ function renderCourtCards() {
       </div>`;
     }
     liveData.forEach(c => {
-      const timerDisplay = c.endTime ? formatCountdown(c.endTime) : c.timer;
+      const timerDisplay = c.endTime ? formatCountdown(c.endTime, true) : c.timer;
       const isUrgent = c.endTime ? (c.endTime - Date.now()) < 30*60000 : c.urgent;
       html += `
       <div class="court-card status-live" onclick="openCourtDetail('${c.id}')">
@@ -6479,7 +6500,7 @@ function renderCourtCards() {
               <span class="cc-status cc-status-live"><span class="live-dot"></span>开庭中</span>
               <span class="cc-tier-badge ${c.tierCls}">${c.tierLabel}</span>
               ${c.aiVerdict?.risk==='高风险'||c.aiVerdict?.risk==='极高风险'?`<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca">⚠️ ${c.aiVerdict.risk}</span>`:''}
-              <span class="cc-timer${isUrgent?' urgent':''}">${timerDisplay}</span>
+              <span class="cc-timer${isUrgent?' urgent':''}" id="timer-${c.id}"></span>
             </div>
           </div>
           <div class="cc-bet-bar-wrap">
@@ -6583,8 +6604,14 @@ function renderCourtCards() {
   }
 
   grid.innerHTML = html;
-}
 
+  // 立刻填充所有 live 卡片的倒计时（span 是空的，需要手动注入 innerHTML）
+  courtData.live.forEach(c => {
+    if (!c.endTime) return;
+    const el = document.getElementById(`timer-${c.id}`);
+    if (el) el.innerHTML = formatCountdown(c.endTime, true);
+  });
+}
 function openCourtDetail(id) {
   if (id === 'DEMO-001') setTimeout(() => startDemoVerdictAnimation(), 800);
   // 找到案件数据（包含 demo）
@@ -7112,6 +7139,16 @@ async function submitDetailBet() {
 
     showToast('✅ 链上押注成功！');
 
+    // 第一笔 openBet 成功后，owner 自动注入初始奖池
+    if (_useOpenBet && currentDetailCase.contract && walletConnected &&
+        walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
+      const seedAmt = currentDetailCase.gavelSeedInit || GAVEL_SEED[currentDetailCase.tier]?.init || 100;
+      const seedWei = BigInt(Math.floor(seedAmt)) * BigInt('1000000000000000000');
+      callContract(MEME_COURT_ADDRESS, encodeSeedOpenPool(currentDetailCase.contract, seedWei))
+        .then(tx => { if (tx) console.log(`💰 seedOpenPool ${currentDetailCase.name}: ${seedAmt} $GAVEL tx=${tx}`); })
+        .catch(e => console.warn('seedOpenPool failed:', e));
+    }
+
     // demo 模式：押注成功后启动 15 秒倒计时
     if (_isDemoFlow) {
       startDemoCountdown();
@@ -7594,16 +7631,35 @@ function updateKpiBar(memes, newCoins) {
   // 24h 交易量
   const volEl = document.querySelector('.bsc-kpi.k-green .bsc-kpi-val');
   if (volEl && totalVol > 0) volEl.textContent = formatUsd(totalVol);
-  // four.meme 今日上线
-  const newEl = document.querySelector('.bsc-kpi.k-amber .bsc-kpi-val');
-  if (newEl && newCoins.length > 0) { newEl.textContent = newCoins.length; newEl.classList.add('green'); }
+  // four.meme 今日上线 — 用 courtData pending + live 总数
+  const totalCases = (courtData.live?.length || 0) + (courtData.pending?.length || 0);
+  const newEl = document.querySelector('.bsc-kpi.k-blue .bsc-kpi-val');
+  if (newEl) { newEl.textContent = totalCases > 0 ? totalCases : newCoins.length; }
   // 活跃地址（取所有代币 txns buys+sells 之和的去重估算）
   const totalTxns = memes.reduce((s,d) => s + (d.txBuys||0) + (d.txSells||0), 0);
-  const addrEl = document.querySelector('.bsc-kpi.k-blue .bsc-kpi-val');
+  const addrEl = document.querySelector('.bsc-kpi.k-accent .bsc-kpi-val');
   if (addrEl && totalTxns > 0) addrEl.textContent = totalTxns.toLocaleString();
-  // 今日新币数
-  const newCoinEl = document.querySelector('.bsc-kpi.k-accent .bsc-kpi-val');
-  if (newCoinEl && newCoins.length > 0) { newCoinEl.textContent = newCoins.length + '+'; newCoinEl.classList.add('accent'); }
+  // 今日新币数 — 用 courtData 真实案件总数
+  const newCoinEl = document.getElementById('kpiNewCoins');
+  if (newCoinEl) {
+    const totalCases = (courtData.live?.length || 0) + (courtData.pending?.length || 0);
+    newCoinEl.textContent = totalCases > 0 ? totalCases : (newCoins.length || '—');
+  }
+  // 恐贪指数 — 基于涨跌幅和新币热度估算
+  const avgChange = memes.length > 0
+    ? memes.reduce((s,d) => s + (d.change24h||0), 0) / memes.length
+    : 0;
+  const fearGreed = Math.min(100, Math.max(0, Math.round(50 + avgChange * 0.5)));
+  const fearEl = document.getElementById('kpiFear');
+  const fearDelta = document.querySelector('.bsc-kpi.k-amber .bsc-kpi-delta');
+  if (fearEl) fearEl.textContent = fearGreed;
+  if (fearDelta) {
+    if (fearGreed >= 75) fearDelta.textContent = '极度贪婪';
+    else if (fearGreed >= 55) fearDelta.textContent = '贪婪';
+    else if (fearGreed >= 45) fearDelta.textContent = '中性';
+    else if (fearGreed >= 25) fearDelta.textContent = '恐惧';
+    else fearDelta.textContent = '极度恐惧';
+  }
 }
 
 function renderBscTableFromReal() {
@@ -7696,19 +7752,17 @@ function startDexAutoRefresh() {
 const bscTableData = {
   fourmeme: {
     hot: [
-      {rank:1,icon:'🦊',name:'FOXAI',source:'four.meme',price:'$0.00042',change:'+127%',up:true,vol:'$48K',liq:'$48K',holders:'312',hot:true,isNew:false},
-      {rank:2,icon:'⚡',name:'ZAPCAT',source:'four.meme',price:'$0.00018',change:'+67%',up:true,vol:'$21K',liq:'$21K',holders:'198',hot:true,isNew:true},
-      {rank:3,icon:'🍄',name:'SHROOMZ',source:'four.meme',price:'$0.00031',change:'+234%',up:true,vol:'$62K',liq:'$62K',holders:'428',hot:true,isNew:true},
-      {rank:4,icon:'🤖',name:'AIBONK',source:'four.meme',price:'$0.00087',change:'+18%',up:true,vol:'$32K',liq:'$320K',holders:'1,243',hot:false,isNew:false},
-      {rank:5,icon:'🌊',name:'WAVEMEME',source:'four.meme',price:'$0.00156',change:'+29%',up:true,vol:'$44K',liq:'$445K',holders:'2,134',hot:false,isNew:false},
-      {rank:6,icon:'🐯',name:'TIGERBNB',source:'four.meme',price:'$0.00009',change:'+89%',up:true,vol:'$18K',liq:'$18K',holders:'156',hot:false,isNew:true},
-      {rank:7,icon:'🎮',name:'GAMEMEME',source:'four.meme',price:'$0.00024',change:'+12%',up:true,vol:'$9K',liq:'$9K',holders:'87',hot:false,isNew:false},
+      {rank:1,icon:'⚡',name:'ZAPCAT',source:'four.meme',price:'$0.00018',change:'+67%',up:true,vol:'$21K',liq:'$21K',holders:'198',hot:true,isNew:true},
+      {rank:2,icon:'🍄',name:'SHROOMZ',source:'four.meme',price:'$0.00031',change:'+234%',up:true,vol:'$62K',liq:'$62K',holders:'428',hot:true,isNew:true},
+      {rank:3,icon:'🤖',name:'AIBONK',source:'four.meme',price:'$0.00087',change:'+18%',up:true,vol:'$32K',liq:'$320K',holders:'1,243',hot:false,isNew:false},
+      {rank:4,icon:'🌊',name:'WAVEMEME',source:'four.meme',price:'$0.00156',change:'+29%',up:true,vol:'$44K',liq:'$445K',holders:'2,134',hot:false,isNew:false},
+      {rank:5,icon:'🐯',name:'TIGERBNB',source:'four.meme',price:'$0.00009',change:'+89%',up:true,vol:'$18K',liq:'$18K',holders:'156',hot:false,isNew:true},
+      {rank:6,icon:'🎮',name:'GAMEMEME',source:'four.meme',price:'$0.00024',change:'+12%',up:true,vol:'$9K',liq:'$9K',holders:'87',hot:false,isNew:false},
     ],
     gain: [
       {rank:1,icon:'🍄',name:'SHROOMZ',source:'four.meme',price:'$0.00031',change:'+234%',up:true,vol:'$62K',liq:'$62K',holders:'428',hot:true,isNew:true},
-      {rank:2,icon:'🦊',name:'FOXAI',source:'four.meme',price:'$0.00042',change:'+127%',up:true,vol:'$48K',liq:'$48K',holders:'312',hot:true,isNew:false},
-      {rank:3,icon:'🐯',name:'TIGERBNB',source:'four.meme',price:'$0.00009',change:'+89%',up:true,vol:'$18K',liq:'$18K',holders:'156',hot:false,isNew:true},
-      {rank:4,icon:'⚡',name:'ZAPCAT',source:'four.meme',price:'$0.00018',change:'+67%',up:true,vol:'$21K',liq:'$21K',holders:'198',hot:false,isNew:true},
+      {rank:2,icon:'🐯',name:'TIGERBNB',source:'four.meme',price:'$0.00009',change:'+89%',up:true,vol:'$18K',liq:'$18K',holders:'156',hot:false,isNew:true},
+      {rank:3,icon:'⚡',name:'ZAPCAT',source:'four.meme',price:'$0.00018',change:'+67%',up:true,vol:'$21K',liq:'$21K',holders:'198',hot:false,isNew:true},
     ],
     new: [
       {rank:1,icon:'🌙',name:'MOONCAT2',source:'four.meme · 42分前',price:'$0.00003',change:'+12%',up:true,vol:'$4K',liq:'$4K',holders:'34',hot:false,isNew:true},
@@ -7722,13 +7776,11 @@ const bscTableData = {
       {rank:1,icon:'🐶',name:'DOGE',source:'CEX · BSC',price:'$0.082',change:'+12%',up:true,vol:'$892M',liq:'$2.1B',holders:'84,231',hot:true,isNew:false},
       {rank:2,icon:'🐸',name:'PEPE',source:'CEX · BSC',price:'$0.0000087',change:'-8%',up:false,vol:'$234M',liq:'$450M',holders:'52,341',hot:true,isNew:false},
       {rank:3,icon:'⚡',name:'TURBO',source:'DEX · BSC',price:'$0.00031',change:'+31%',up:true,vol:'$18M',liq:'$8.2M',holders:'12,431',hot:false,isNew:false},
-      {rank:4,icon:'🦊',name:'FOXAI',source:'four.meme',price:'$0.00042',change:'+127%',up:true,vol:'$48K',liq:'$48K',holders:'312',hot:true,isNew:true},
-      {rank:5,icon:'🍄',name:'SHROOMZ',source:'four.meme',price:'$0.00031',change:'+234%',up:true,vol:'$62K',liq:'$62K',holders:'428',hot:false,isNew:true},
+      {rank:4,icon:'🍄',name:'SHROOMZ',source:'four.meme',price:'$0.00031',change:'+234%',up:true,vol:'$62K',liq:'$62K',holders:'428',hot:false,isNew:true},
     ],
     gain: [
       {rank:1,icon:'🍄',name:'SHROOMZ',source:'four.meme',price:'$0.00031',change:'+234%',up:true,vol:'$62K',liq:'$62K',holders:'428',hot:true,isNew:true},
-      {rank:2,icon:'🦊',name:'FOXAI',source:'four.meme',price:'$0.00042',change:'+127%',up:true,vol:'$48K',liq:'$48K',holders:'312',hot:true,isNew:false},
-      {rank:3,icon:'⚡',name:'TURBO',source:'DEX',price:'$0.00031',change:'+31%',up:true,vol:'$18M',liq:'$8.2M',holders:'12,431',hot:false,isNew:false},
+      {rank:2,icon:'⚡',name:'TURBO',source:'DEX',price:'$0.00031',change:'+31%',up:true,vol:'$18M',liq:'$8.2M',holders:'12,431',hot:false,isNew:false},
     ],
     new: [
       {rank:1,icon:'🌙',name:'MOONCAT2',source:'four.meme · 42分前',price:'$0.00003',change:'+12%',up:true,vol:'$4K',liq:'$4K',holders:'34',hot:false,isNew:true},
@@ -7741,7 +7793,6 @@ const bscBubbleData = [
   {name:'DOGE',change:12,vol:892,liq:2100,heat:95,color:'#ff6340'},
   {name:'PEPE',change:-8,vol:234,liq:450,heat:78,color:'#d97706'},
   {name:'TURBO',change:31,vol:18,liq:8.2,heat:72,color:'#d97706'},
-  {name:'FOXAI',change:127,vol:0.048,liq:0.048,heat:88,color:'#ff6340'},
   {name:'SHROOMZ',change:234,vol:0.062,liq:0.062,heat:82,color:'#ff6340'},
   {name:'AIBONK',change:18,vol:0.032,liq:0.32,heat:65,color:'#2563eb'},
   {name:'WIF',change:2,vol:45,liq:45,heat:58,color:'#2563eb'},
@@ -7752,7 +7803,6 @@ const bscBubbleData = [
 
 const bscFeedDataLeft = [
   {tag:'bet-new',tagText:'新币上线',coin:'MOONCAT2',time:'刚刚',text:'four.meme 新项目发射，初始流动性 $4K，42分钟涨幅 +12%。',trans:'热度不错，可观望。'},
-  {tag:'bet-buy',tagText:'大额买入',coin:'FOXAI',time:'8分前',text:'0x7a…4f 一次性买入 $8.4 万 FOXAI，疑似早期布局。',trans:'聪明钱进场，注意跟踪。'},
   {tag:'bet-hot',tagText:'热度飙升',coin:'SHROOMZ',time:'15分前',text:'SHROOMZ 过去 1 小时交易量暴增 340%。',trans:'热度来了，注意是否庄拉。'},
   {tag:'bet-new',tagText:'新币上线',coin:'FIREPEPE',time:'1h前',text:'FIREPEPE 在 four.meme 发射，3小时内流动性增至 $28K，+67%。',trans:'早期进场已赚飞。'},
   {tag:'bet-buy',tagText:'建仓信号',coin:'BONK',time:'3h前',text:'0xf1…2a 分 8 笔买入 BONK 总计 $31 万，均价偏低。',trans:'大钱悄悄入场。'},
@@ -8032,7 +8082,6 @@ function initBscBarChart() {
       {name:'WIF',  val:45e6,  color:'#d97706'},
       {name:'TURBO',val:18e6,  color:'#ff6340'},
       {name:'BONK', val:12e6,  color:'#9333ea'},
-      {name:'FOXAI',val:48000, color:'#ff6340'},
       {name:'AIBONK',val:32000,color:'#0284c7'},
       {name:'SHROOMZ',val:62000,color:'#dc2626'},
     ];
@@ -8104,7 +8153,6 @@ function initBscPieChart() {
 
 /* ── 热门开庭横向卡片 ── */
 const hotCourtCards = [
-  {id:'C-2026-041',icon:'🦊',name:'FOXAI',time:'2小时前上线',risk:'high',riskLabel:'高风险',liq:'$48K',holders:'312',change:'+127%',changeUp:true,heat:88,badges:['🔥热度已达标','🤖AI前印象'],verdict:'本庭注意到 FOXAI 在过去两小时内吸引了大量早期进场者。机会确实存在，但流动性薄如蝉翼，稍有风吹草动即可能血崩。',source:'four.meme'},
   {id:'C-2026-039',icon:'🌊',name:'WAVEMEME',time:'22小时前上线',risk:'low',riskLabel:'低风险',liq:'$445K',holders:'2,134',change:'+29%',changeUp:true,heat:91,badges:['🔥热度已达标','🤖AI前印象'],verdict:'WAVEMEME 流动性在本期新案中最为充裕，AI+BONK 叙事组合有一定感召力，链上数据支撑较为健康，是本期最稳健的押注标的。',source:'four.meme'},
   {id:'C-2026-040',icon:'🤖',name:'AIBONK',time:'8小时前上线',risk:'mid',riskLabel:'中风险',liq:'$320K',holders:'1,243',change:'+18%',changeUp:true,heat:76,badges:['🔥热度已达标','🤖AI前印象'],verdict:'AIBONK 的社区活跃度在同期新币中属于上游水平，流动性尚可，但本庭提醒：猪会飞的前提是有人托举。后续需观察持仓集中度。',source:'four.meme'},
   {id:'C-2026-038',icon:'🐲',name:'DRAGONX',time:'11小时前上线',risk:'high',riskLabel:'高风险',liq:'$89K',holders:'567',change:'-12%',changeUp:false,heat:62,badges:['🤖AI前印象'],verdict:'本庭观察到 DRAGONX 已出现早期卖压，上线 11 小时即下跌 12%，散户情绪开始动摇，需要重大催化剂才能反转局面。',source:'four.meme'},
@@ -8520,10 +8568,10 @@ async function loadFeaturedData() {
           full: parsed.full,
           caseId: `FM-${t.tokenAddress?.slice(2,8).toUpperCase() || '000000'}`,
           metrics: [
-            { label: '流动性', value: `$${t.cap || '—'}`, src: 'four.meme' },
-            { label: '24h 涨跌', value: `${parseFloat(t.day1Increase||0)>=0?'+':''}${change24}%`, src: 'four.meme' },
-            { label: '持仓地址', value: `${t.hold || '—'}`, src: 'four.meme' },
-            { label: 'Bonding进度', value: `${t.progress?(parseFloat(t.progress)*100).toFixed(1):'—'}%`, src: 'four.meme' },
+            { label: '流动性', val: `$${t.cap || '—'}`, sub: 'four.meme', color: '#fff' },
+            { label: '24h 涨跌', val: `${parseFloat(t.day1Increase||0)>=0?'+':''}${change24}%`, sub: 'four.meme', color: parseFloat(t.day1Increase||0)>=0?'#4ade80':'#f87171' },
+            { label: '持仓地址', val: `${t.hold || '—'}`, sub: 'four.meme', color: '#fff' },
+            { label: 'Bonding进度', val: `${t.progress?(parseFloat(t.progress)*100).toFixed(1):'—'}%`, sub: 'four.meme', color: '#fff' },
           ],
         });
       } catch(e) {
@@ -9209,6 +9257,19 @@ setInterval(fetchFourMemeTokens, 5 * 60 * 1000); // 每 5 分钟刷新
 
 // 清理旧版申请案件缓存（v1 已废弃）
 try { localStorage.removeItem('mc_live_cases'); } catch(e) {}
+// 清理旧格式精选裁定缓存（value 字段已改为 val，强制重新拉取一次）
+try {
+  const today = new Date().toLocaleDateString('zh-CN');
+  const cacheKey = 'memecourt_featured_v2_' + today;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    const parsed = JSON.parse(cached);
+    // 如果缓存里的 metrics 用的是旧 value 字段，清除重新拉
+    if (parsed?.[0]?.metrics?.[0]?.value !== undefined) {
+      localStorage.removeItem(cacheKey);
+    }
+  }
+} catch(e) {}
 setInterval(updateCd,60000);
 setInterval(updateBetDeadline,1000);
 // 检查 MetaMask 是否已授权
@@ -9402,11 +9463,13 @@ function loadLiveCases() {
     if (!raw) return;
     const saved = JSON.parse(raw);
     const existingIds = new Set(courtData.live.map(c => c.id));
+    // 过滤掉已知假数据（name 或 id 匹配的测试条目）
+    const BLOCKED = new Set(['FOXAI', 'test', 'TEST']);
     saved.forEach(c => {
-      if (!existingIds.has(c.id)) {
-        if (c.onChain === undefined) c.onChain = false; // 기존 저장 데이터 호환
-        courtData.live.unshift(c);
-      }
+      if (existingIds.has(c.id)) return;
+      if (BLOCKED.has(c.name)) return;
+      if (c.onChain === undefined) c.onChain = false;
+      courtData.live.unshift(c);
     });
   } catch(e) {}
 }
@@ -9441,7 +9504,8 @@ async function settleCaseAuto(c) {
   }
 
   // 链上结算：自动拉取 → settleOpen(tokenAddress)，手动申请 → settle(caseId)
-  if (walletConnected) {
+  // 仅 owner 钱包才触发链上结算，避免普通用户连钱包时反复弹出 MetaMask 签名请求
+  if (walletConnected && walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
     try {
       if (!c.onChain && c.contract && c.contract.startsWith('0x')) {
         // openBet 路径：settleOpen(address, uint8)
@@ -9530,6 +9594,18 @@ function updateLiveTimers() {
   courtData.live.forEach(c => {
     if (!c.endTime) return;
     c.timer = formatCountdown(c.endTime);
+
+    // 直接更新 DOM，不重新渲染整个卡片
+    const timerEl = document.getElementById(`timer-${c.id}`);
+    if (timerEl) {
+      const diff = c.endTime - Date.now();
+      const isUrgent = diff < 30 * 60000;
+      timerEl.innerHTML = formatCountdown(c.endTime, true);
+      // 最后30分钟加 urgent 样式
+      if (isUrgent) timerEl.classList.add('urgent');
+      else timerEl.classList.remove('urgent');
+    }
+
     if (c.endTime <= Date.now() && !c._settling) {
       c._settling = true;
       settleCaseAuto(c);
@@ -9552,8 +9628,8 @@ function updateLiveTimers() {
       const remaining = dc.endTime - Date.now();
       const timerEl = document.querySelector('.demo-countdown');
       if (timerEl) {
-        timerEl.textContent = remaining > 0 ? formatCountdown(dc.endTime) : '结算中...';
-        timerEl.style.color = remaining < 8000 ? 'var(--red)' : 'var(--accent)';
+        timerEl.innerHTML = remaining > 0 ? formatCountdown(dc.endTime, true) : '结算中...';
+        timerEl.style.color = remaining < 8000 ? 'var(--red)' : '';
       }
       if (remaining <= 0 && !dc._settling) {
         dc._settling = true;
