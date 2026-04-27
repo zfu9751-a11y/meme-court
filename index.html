@@ -1551,12 +1551,32 @@ textarea::placeholder{color:var(--text3)}
       <span class="logo-text">Meme 法庭</span>
     </a>
     <nav class="nav-center">
-      <button class="nav-link active" id="nav-home" onclick="showPage('home')">首页</button>
-      <button class="nav-link" id="nav-court" onclick="showPage('court')">开庭广场</button>
-      <button class="nav-link" id="nav-rank" onclick="showPage('rank')">Meme 雷达</button>
-      <button class="nav-link" id="nav-profile" onclick="showPage('profile')">我的</button>
+      <button class="nav-link active" id="nav-home" onclick="showPage('home')" data-zh="首页" data-en="Home">首页</button>
+      <button class="nav-link" id="nav-court" onclick="showPage('court')" data-zh="开庭广场" data-en="Court Plaza">开庭广场</button>
+      <button class="nav-link" id="nav-rank" onclick="showPage('rank')" data-zh="Meme 雷达" data-en="Meme Radar">Meme 雷达</button>
+      <button class="nav-link" id="nav-profile" onclick="showPage('profile')" data-zh="我的" data-en="My Profile">我的</button>
     </nav>
     <div class="nav-right">
+      <!-- 联系方式 -->
+      <div style="display:flex;align-items:center;gap:6px;margin-right:8px">
+        <a href="https://x.com/MemeCourt_BNB" target="_blank" title="Twitter / X"
+           style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:99px;border:1px solid var(--border);background:var(--white);color:var(--text2);text-decoration:none;transition:all .15s;font-size:13px"
+           onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'"
+           onmouseout="this.style.color='var(--text2)';this.style.borderColor='var(--border)'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a href="https://t.me/lant1ng" target="_blank" title="Telegram"
+           style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:99px;border:1px solid var(--border);background:var(--white);color:#2AABEE;text-decoration:none;transition:all .15s;font-size:13px"
+           onmouseover="this.style.borderColor='var(--border2)'"
+           onmouseout="this.style.borderColor='var(--border)'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        </a>
+      </div>
+      <!-- 语言切换 -->
+      <div id="langToggle" style="display:flex;align-items:center;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:3px;margin-right:8px;cursor:pointer">
+        <button id="langZh" onclick="setLang('zh')" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:none;cursor:pointer;background:var(--white);color:var(--text);border:1px solid var(--border2);font-family:var(--sans)">中</button>
+        <button id="langEn" onclick="setLang('en')" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:none;cursor:pointer;background:transparent;color:var(--text2);font-family:var(--sans)">EN</button>
+      </div>
       <div class="wallet-capsule" id="walletCapsule">
         <button class="gavel-bal-btn" id="gavelBal" onclick="walletConnected ? openGavelModal() : openGetGavelModal()">
           <span class="gavel-bal-icon">⚖️</span>
@@ -10752,6 +10772,110 @@ async function settleDemoCase() {
   renderCourtCards();
 }
 
+</script>
+<!-- ══ FOOTER ══ -->
+<footer style="background:var(--bg);border-top:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;margin-top:auto">
+  <div style="font-size:12px;color:var(--text3)" id="footerText">© 2026 Meme Court · four.meme AI Sprint · BSC Testnet</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <a href="https://x.com/MemeCourt_BNB" target="_blank"
+       style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);text-decoration:none;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);transition:all .15s"
+       onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text2)'">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      @MemeCourt_BNB
+    </a>
+    <a href="https://t.me/lant1ng" target="_blank"
+       style="display:flex;align-items:center;gap:5px;font-size:12px;color:#2AABEE;text-decoration:none;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);transition:all .15s"
+       onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      Telegram
+    </a>
+  </div>
+</footer>
+
+<script>
+/* ══ 语言切换 ══ */
+let currentLang = 'zh';
+
+const I18N = {
+  zh: {
+    navHome: '首页', navCourt: '开庭广场', navRadar: 'Meme 雷达', navProfile: '我的',
+    heroTitle: '今天你开庭了吗？',
+    heroTag: '⚖️ AI 法官每周开庭 · BNB Chain · four.meme',
+    heroDesc: 'AI 法官综合链上数据与社区投票，每周开庭裁决。你的投票影响下期曝光权重。',
+    heroInput: '向 AI 法官提起申诉，例如：PEPE 这周能买吗？',
+    heroBtn: '⚖️ 提请裁决',
+    connectWallet: '连接钱包',
+    courtPlaza: '开庭广场',
+    liveTab: '进行中', pendingTab: '候审', demoTab: '演示',
+    joinBtn: '参与开庭', injectBtn: '注入',
+    footerText: '© 2026 Meme Court · four.meme AI Sprint · BSC Testnet',
+  },
+  en: {
+    navHome: 'Home', navCourt: 'Court Plaza', navRadar: 'Meme Radar', navProfile: 'My Profile',
+    heroTitle: 'Has your meme been tried today?',
+    heroTag: '⚖️ AI Judge · BNB Chain · four.meme',
+    heroDesc: 'The AI Judge analyzes on-chain data and community votes to deliver weekly verdicts. Your vote shapes the next exposure weight.',
+    heroInput: 'Ask the AI Judge, e.g.: Should I buy PEPE this week?',
+    heroBtn: '⚖️ Submit Verdict',
+    connectWallet: 'Connect Wallet',
+    courtPlaza: 'Court Plaza',
+    liveTab: 'Live', pendingTab: 'Pending', demoTab: 'Demo',
+    joinBtn: 'Join', injectBtn: 'Inject',
+    footerText: '© 2026 Meme Court · four.meme AI Sprint · BSC Testnet',
+  }
+};
+
+function setLang(lang) {
+  currentLang = lang;
+  const t = I18N[lang];
+
+  // 导航按钮
+  const navMap = { 'nav-home': t.navHome, 'nav-court': t.navCourt, 'nav-rank': t.navRadar, 'nav-profile': t.navProfile };
+  Object.entries(navMap).forEach(([id, text]) => { const el = document.getElementById(id); if (el) el.textContent = text; });
+
+  // 语言切换按钮样式
+  const zhBtn = document.getElementById('langZh');
+  const enBtn = document.getElementById('langEn');
+  if (lang === 'zh') {
+    zhBtn.style.cssText = 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid var(--border2);cursor:pointer;background:var(--white);color:var(--text);font-family:var(--sans)';
+    enBtn.style.cssText = 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:none;cursor:pointer;background:transparent;color:var(--text2);font-family:var(--sans)';
+  } else {
+    enBtn.style.cssText = 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid var(--border2);cursor:pointer;background:var(--white);color:var(--text);font-family:var(--sans)';
+    zhBtn.style.cssText = 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:none;cursor:pointer;background:transparent;color:var(--text2);font-family:var(--sans)';
+  }
+
+  // 首页 Hero
+  const heroTitle = document.querySelector('.hero-wrap .hero-content > div:first-child');
+  if (heroTitle) heroTitle.textContent = t.heroTitle;
+  const heroTag = document.querySelector('.hero-tag');
+  if (heroTag) heroTag.textContent = t.heroTag;
+  const heroDesc = document.querySelector('.hero-desc');
+  if (heroDesc) heroDesc.textContent = t.heroDesc;
+  const appealInput = document.getElementById('appealInput');
+  if (appealInput) appealInput.placeholder = t.heroInput;
+  const appealBtn = document.getElementById('appealBtn');
+  if (appealBtn) appealBtn.textContent = t.heroBtn;
+
+  // 连接钱包
+  const walletText = document.getElementById('walletAddrText');
+  if (walletText && !walletConnected) walletText.textContent = t.connectWallet;
+
+  // 开庭广场 tab 标签
+  const tabAll = document.getElementById('courtTabAll');
+  if (tabAll) { const cnt = tabAll.querySelector('.tab-count'); tabAll.firstChild.textContent = (lang === 'en' ? 'All ' : '全部 '); }
+
+  // footer
+  const footer = document.getElementById('footerText');
+  if (footer) footer.textContent = t.footerText;
+
+  // 所有 data-zh / data-en 属性的元素
+  document.querySelectorAll('[data-zh][data-en]').forEach(el => {
+    el.textContent = el.getAttribute(`data-${lang}`);
+  });
+
+  // 重新渲染开庭广场（更新按钮文字）
+  if (typeof renderCourtCards === 'function') renderCourtCards();
+}
 </script>
 </body>
 </html>
