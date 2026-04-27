@@ -9462,12 +9462,15 @@ function loadLiveCases() {
     const raw = localStorage.getItem('mc_live_cases_v2');
     if (!raw) return;
     const saved = JSON.parse(raw);
+    const now = Date.now();
     const existingIds = new Set(courtData.live.map(c => c.id));
-    // 过滤掉已知假数据（name 或 id 匹配的测试条目）
+    // 过滤条件：1) 非假数据 2) 未到期或到期不超过5分钟（给结算留缓冲）
     const BLOCKED = new Set(['FOXAI', 'test', 'TEST']);
     saved.forEach(c => {
       if (existingIds.has(c.id)) return;
       if (BLOCKED.has(c.name)) return;
+      // 到期超过5分钟的直接丢弃，不再加载
+      if (c.endTime && (now - c.endTime) > 5 * 60 * 1000) return;
       if (c.onChain === undefined) c.onChain = false;
       courtData.live.unshift(c);
     });
@@ -9483,37 +9486,29 @@ async function checkExpiredCases() {
 }
 
 async function settleCaseAuto(c) {
+  // 防止重复结算
+  if (c._settling) return;
+  c._settling = true;
+
+  // 拉取收庭价，拉不到就用开庭价兜底，确保结算一定执行
   let closePrice = null;
-  if (c.contract) closePrice = await fetchFourMemePrice(c.contract);
-  if (!closePrice) closePrice = c.openPrice || 1;
+  try {
+    if (c.contract) closePrice = await fetchFourMemePrice(c.contract);
+  } catch(e) {}
+  if (!closePrice || isNaN(closePrice)) closePrice = c.openPrice || 1;
+
   const openP  = c.openPrice || closePrice;
   const isUp   = closePrice >= openP;
-  const change = openP > 0 ? ((closePrice-openP)/openP*100).toFixed(1) : '0';
+  const change = openP > 0 ? ((closePrice - openP) / openP * 100).toFixed(1) : '0';
 
-  // 结算前补足累积 $GAVEL 底池差额（仅 owner）
-  if (walletConnected && walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase() && c.openTime) {
-    const accrued = Math.floor(calcGavelSeedDisplay(c.tier, c.openTime));
-    const paid    = c.gavelSeedPaid || (GAVEL_SEED[c.tier]?.init || 100);
-    const topUp   = Math.max(0, accrued - paid);
-    if (topUp > 0) {
-      try {
-        const tx = await callSeedGavelPool(c.id, topUp);
-        if (tx) { c.gavelSeedPaid = accrued; console.log(`💰 结算补注 ${topUp} $GAVEL for ${c.name}`); }
-      } catch(e) { console.warn('topup failed:', e); }
-    }
-  }
-
-  // 链上结算：自动拉取 → settleOpen(tokenAddress)，手动申请 → settle(caseId)
-  // 仅 owner 钱包才触发链上结算，避免普通用户连钱包时反复弹出 MetaMask 签名请求
+  // 链上结算：仅 owner 钱包才触发，避免普通用户弹窗
   if (walletConnected && walletAddress?.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
     try {
       if (!c.onChain && c.contract && c.contract.startsWith('0x')) {
-        // openBet 路径：settleOpen(address, uint8)
         const data = encodeSettleOpen(c.contract, isUp ? 1 : 0);
         const tx = await callContract(MEME_COURT_ADDRESS, data);
         if (tx) console.log(`✅ settleOpen ${c.name} tx=${tx.slice(0,10)}...`);
       } else if (c.onChain) {
-        // betWithGavel 路径：settle(string, uint8)
         const _sBytes = new TextEncoder().encode(c.id);
         const _sHex   = Array.from(_sBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
         const _sLen   = _sBytes.length.toString(16).padStart(64,'0');
@@ -9529,7 +9524,9 @@ async function settleCaseAuto(c) {
     } catch(e) { console.warn('chain settle failed:', e); }
   }
 
-  doSettle(c, isUp?'up':'down', closePrice, `${isUp?'+':''}${change}%（开庭 $${openP?.toPrecision(4)} → 结算 $${closePrice?.toPrecision(4)}）`);
+  // 前端结算一定执行，不依赖链上交易结果
+  doSettle(c, isUp ? 'up' : 'down', closePrice,
+    `${isUp?'+':''}${change}%（开庭 $${openP?.toPrecision(4)} → 结算 $${closePrice?.toPrecision(4)}）`);
 }
 
 function doSettle(c, winDir, closePrice, priceNote) {
